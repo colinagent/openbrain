@@ -1,0 +1,27 @@
+{
+  "baseDir": "~/.openbrain",
+  "env": "local",
+  "override": true,
+  "objectStore": {
+    "type": "fs",
+    "fs": {
+      "baseDir": "objects"
+    }
+  },
+  "heartbeat": {
+    "interval": "30s"
+  },
+  "runtimeUpdate": {
+    "enabled": true,
+    "manifestURL": "https://github.com/colinagent/openbrain/releases/latest/download/runtime-manifest.json",
+    "checkInterval": "30m",
+    "checkTimeout": "8s",
+    "idleGracePeriod": "15s",
+    "downloadDir": "run/runtime-update"
+  },
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000
+  }
+}

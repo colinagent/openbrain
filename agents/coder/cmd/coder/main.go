@@ -1,0 +1,368 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"syscall"
+
+	"github.com/colinagent/openbrain/opagent-protocol/go-sdk/op"
+	"gopkg.in/yaml.v3"
+)
+
+type agentConfig struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+}
+
+type listedNode struct {
+	ID   string          `json:"id"`
+	Kind string          `json:"kind"`
+	URI  string          `json:"uri"`
+	Cwd  string          `json:"cwd"`
+	Meta json.RawMessage `json:"meta"`
+}
+
+type listedAgentMeta struct {
+	Name      string   `json:"name"`
+	Skills    []string `json:"skills"`
+	SubAgents []string `json:"subAgents"`
+}
+
+type listedSkillMeta struct {
+	Slug        string `json:"slug"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+func main() {
+	agentFile, meta, err := loadAgentRegistrationMeta()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load coder agent metadata: %v\n", err)
+		os.Exit(1)
+	}
+
+	server := op.NewServer(&op.Implementation{Name: meta.Name, Version: "v1.0.0"}, &op.ServerOptions{
+		OpNodeHandler: func(ctx context.Context, req *op.ServerRequest[*op.OpNodeParams]) (*op.OpNodeResult, error) {
+			return handleOpNode(ctx, req, agentFile)
+		},
+	})
+	server.AddAgent(meta, handleCallAgent)
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	defer stop()
+
+	if err := server.Run(ctx, &op.StdioTransport{}); err != nil && !errors.Is(err, context.Canceled) {
+		fmt.Fprintf(os.Stderr, "coder agent server failed: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func handleCallAgent(ctx context.Context, req *op.CallAgentRequest) (*op.CallAgentResult, error) {
+	if req == nil || req.Session == nil || req.Params == nil {
+		return nil, fmt.Errorf("agent call params are required")
+	}
+	result, err := req.Session.OpNode(ctx, &op.OpNodeParams{
+		OpCode:  op.OpAgentLoopCreate,
+		Meta:    cloneMeta(req.Params.Meta),
+		Content: req.Params.Content,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("agent loop returned nil result")
+	}
+	return &op.CallAgentResult{
+		AgentID: req.Params.AgentID,
+		Meta:    result.Meta,
+		Content: result.Content,
+	}, nil
+}
+
+func handleOpNode(ctx context.Context, req *op.ServerRequest[*op.OpNodeParams], agentFile string) (*op.OpNodeResult, error) {
+	if req == nil || req.Params == nil {
+		return nil, fmt.Errorf("node operation params are required")
+	}
+	switch req.Params.OpCode {
+	case op.OpPromptGet:
+		prompt, err := buildPrompt(ctx, req.Session, agentFile, req.Params.Meta)
+		if err != nil {
+			return nil, err
+		}
+		return &op.OpNodeResult{
+			OpCode:  op.OpPromptGet,
+			Meta:    cloneMeta(req.Params.Meta),
+			Content: &op.TextContent{Text: prompt},
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported node opcode: %s", req.Params.OpCode)
+	}
+}
+
+func buildPrompt(ctx context.Context, session *op.ServerSession, agentFile string, meta op.Meta) (string, error) {
+	basePrompt, err := LoadMarkdownBody(agentFile)
+	if err != nil {
+		return "", fmt.Errorf("load agent prompt: %w", err)
+	}
+	platform := runtime.GOOS
+	basePrompt = ExpandPlatformVariables(basePrompt, platform)
+
+	cwdAgentsPath, err := ResolveCwdAgentsPath(metaString(meta, "cwd"))
+	if err != nil {
+		return "", fmt.Errorf("resolve cwd AGENTS.md: %w", err)
+	}
+
+	availableSkills, selectedSkills, err := resolveSkillContexts(ctx, session, meta)
+	if err != nil {
+		return "", fmt.Errorf("resolve skill contexts: %w", err)
+	}
+
+	return BuildSystemPromptWithPaths(basePrompt, ResolveOpAgentShellContext(platform), cwdAgentsPath, availableSkills, selectedSkills, selectedSkillContextFromMeta(meta)), nil
+}
+
+func loadListedNodes(ctx context.Context, session *op.ServerSession) ([]listedNode, error) {
+	if session == nil {
+		return nil, fmt.Errorf("server session is required")
+	}
+	result, err := session.OpNode(ctx, &op.OpNodeParams{
+		OpCode: op.OpNodeList,
+		Meta:   op.Meta{"refresh": false},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("node/list returned nil result")
+	}
+	jsonContent, ok := result.Content.(*op.JsonContent)
+	if !ok || jsonContent == nil {
+		return nil, fmt.Errorf("node/list did not return json content")
+	}
+
+	var nodes []listedNode
+	if err := json.Unmarshal(jsonContent.Raw, &nodes); err != nil {
+		return nil, fmt.Errorf("decode node list: %w", err)
+	}
+	return nodes, nil
+}
+
+func resolveSkillContexts(ctx context.Context, session *op.ServerSession, meta op.Meta) ([]SkillContext, []SkillContext, error) {
+	if session == nil {
+		return nil, nil, fmt.Errorf("server session is required")
+	}
+	agentID := metaString(meta, "agentID")
+	if agentID == "" {
+		return nil, nil, nil
+	}
+
+	nodes, err := loadListedNodes(ctx, session)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	agentSkillIDs := []string(nil)
+	skillByID := make(map[string]SkillContext)
+	for _, node := range nodes {
+		switch strings.TrimSpace(node.Kind) {
+		case string(op.NodeKindAgent):
+			if strings.TrimSpace(node.ID) != agentID {
+				continue
+			}
+			var agentMeta listedAgentMeta
+			if err := json.Unmarshal(node.Meta, &agentMeta); err != nil {
+				return nil, nil, fmt.Errorf("decode agent meta: %w", err)
+			}
+			agentSkillIDs = append(agentSkillIDs, agentMeta.Skills...)
+		case string(op.NodeKindSkill):
+			var skillMeta listedSkillMeta
+			if err := json.Unmarshal(node.Meta, &skillMeta); err != nil {
+				return nil, nil, fmt.Errorf("decode skill meta: %w", err)
+			}
+			skillID := strings.TrimSpace(node.ID)
+			skillByID[skillID] = SkillContext{
+				ID:          skillID,
+				Slug:        strings.TrimSpace(skillMeta.Slug),
+				Name:        strings.TrimSpace(skillMeta.Name),
+				Description: strings.TrimSpace(skillMeta.Description),
+				SkillFile:   strings.TrimSpace(op.URIToPath(node.URI)),
+				SkillDir:    strings.TrimSpace(node.Cwd),
+			}
+		}
+	}
+
+	selectedIDs := make(map[string]struct{})
+	for _, id := range selectedSkillIDsFromMeta(meta) {
+		selectedIDs[id] = struct{}{}
+	}
+
+	available := make([]SkillContext, 0, len(agentSkillIDs))
+	selected := make([]SkillContext, 0, len(selectedIDs))
+	selectedSeen := make(map[string]struct{})
+	for _, id := range agentSkillIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		skill, ok := skillByID[id]
+		if !ok {
+			continue
+		}
+		if _, isSelected := selectedIDs[id]; isSelected {
+			if _, exists := selectedSeen[id]; !exists {
+				selected = append(selected, skill)
+				selectedSeen[id] = struct{}{}
+			}
+			continue
+		}
+		available = append(available, skill)
+	}
+
+	for _, id := range selectedSkillIDsFromMeta(meta) {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, exists := selectedSeen[id]; exists {
+			continue
+		}
+		skill, ok := skillByID[id]
+		if !ok {
+			continue
+		}
+		selected = append(selected, skill)
+		selectedSeen[id] = struct{}{}
+	}
+
+	return available, selected, nil
+}
+
+func loadAgentRegistrationMeta() (string, *op.AgentMeta, error) {
+	agentFile, err := resolveAgentFileFromExecutable()
+	if err != nil {
+		return "", nil, err
+	}
+	data, err := os.ReadFile(agentFile)
+	if err != nil {
+		return "", nil, err
+	}
+	frontMatter, ok := extractFrontMatter(string(data))
+	if !ok {
+		return "", nil, fmt.Errorf("AGENT.md missing YAML front matter")
+	}
+	var cfg agentConfig
+	if err := yaml.Unmarshal([]byte(frontMatter), &cfg); err != nil {
+		return "", nil, fmt.Errorf("parse agent front matter: %w", err)
+	}
+	name := strings.TrimSpace(cfg.Name)
+	if name == "" {
+		return "", nil, fmt.Errorf("agent name is required")
+	}
+	return agentFile, &op.AgentMeta{
+		Name:        name,
+		Description: strings.TrimSpace(cfg.Description),
+	}, nil
+}
+
+func resolveAgentFileFromExecutable() (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return resolveAgentFileFromExecutablePath(exePath), nil
+}
+
+func resolveAgentFileFromExecutablePath(exePath string) string {
+	binDir := filepath.Dir(exePath)
+	agentResourceDir := filepath.Dir(binDir)
+	return filepath.Join(agentResourceDir, "AGENT.md")
+}
+
+func extractFrontMatter(content string) (string, bool) {
+	content = strings.TrimPrefix(content, "\ufeff")
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return "", false
+	}
+	for i := 1; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "---" || line == "..." {
+			return strings.Join(lines[1:i], "\n"), true
+		}
+	}
+	return "", false
+}
+
+func selectedSkillIDsFromMeta(meta op.Meta) []string {
+	if meta == nil {
+		return nil
+	}
+	raw := meta["selectedSkillIDs"]
+	switch typed := raw.(type) {
+	case []string:
+		next := make([]string, 0, len(typed))
+		for _, value := range typed {
+			value = strings.TrimSpace(value)
+			if value != "" {
+				next = append(next, value)
+			}
+		}
+		return next
+	case []any:
+		next := make([]string, 0, len(typed))
+		for _, value := range typed {
+			text, ok := value.(string)
+			if !ok {
+				continue
+			}
+			text = strings.TrimSpace(text)
+			if text != "" {
+				next = append(next, text)
+			}
+		}
+		return next
+	default:
+		return nil
+	}
+}
+
+func selectedSkillContextFromMeta(meta op.Meta) map[string]any {
+	if meta == nil {
+		return nil
+	}
+	raw := meta["selectedSkillContext"]
+	switch typed := raw.(type) {
+	case op.Meta:
+		return typed.Clone()
+	case map[string]any:
+		next := make(map[string]any, len(typed))
+		for key, value := range typed {
+			next[key] = value
+		}
+		return next
+	default:
+		return nil
+	}
+}
+
+func metaString(meta op.Meta, key string) string {
+	if meta == nil {
+		return ""
+	}
+	value, _ := meta[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func cloneMeta(meta op.Meta) op.Meta {
+	if meta == nil {
+		return nil
+	}
+	return meta.Clone()
+}
