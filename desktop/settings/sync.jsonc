@@ -1,0 +1,12 @@
+{
+  // Configuration file schema version. Keep as 1 unless release notes say otherwise.
+  "version": 1,
+
+  // Files synced between desktop sessions/devices. Paths are relative to ~/.openbrain.
+  // Keep secrets in the existing auth/models files; add only small user-facing config files here.
+  "files": [
+    "configs/auth.json",
+    "configs/models.json",
+    "settings/profile.json"
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "unsaved": {
+    "title": "Close without saving?",
+    "body": "\"{{title}}\" has unsaved changes. Closing it now will discard those edits.",
+    "closeAnyway": "Close Anyway"
+  },
+  "rename": {
+    "title": "Rename",
+    "selected": "Rename selected entry",
+    "pathPrefix": "Rename:\n{{path}}"
+  },
+  "delete": {
+    "title": "Delete",
+    "moveToTrash": "Move to Trash",
+    "deletePermanently": "Delete Permanently",
+    "file": "Move file to Trash?\n\n{{path}}",
+    "folder": "Move folder to Trash?\n\n{{path}}\n\nAll contents will be moved too.",
+    "multi": "Move {{count}} items to Trash?",
+    "andMore": "...and {{count}} more",
+    "folderContentsToo": "Folder contents will be moved too."
+  },
+  "importConflict": {
+    "title": "Overwrite existing files?",
+    "body": "The drop target already contains {{count}} conflicting path(s).\n\nTarget: {{dir}}",
+    "more": "+ {{count}} more",
+    "overwrite": "Overwrite"
+  },
+  "agentExists": {
+    "title": "Agent Already Exists",
+    "body": "This directory already has an Agent:\n\n{{path}}\n\nSwitch Agent in the conversation panel.",
+    "ok": "OK"
+  },
+  "auth": {
+    "signInRequired": "Sign in required",
+    "reasonChat": "Chat requires sign in before the agent can start.",
+    "reasonCommand": "Running commands requires an OpenBrain account so the runtime can use your workspace identity.",
+    "reasonPlan": "Plan execution requires sign in before the agent can run.",
+    "reasonThreadControl": "Controlling a running thread requires sign in first.",
+    "reasonCompact": "Compacting a thread requires sign in first.",
+    "reasonResume": "Continuing this thread requires sign in first.",
+    "signInLink": "Sign in link",
+    "advancedOptions": "Advanced sign-in options",
+    "orgCode": "Organization code",
+    "orgCodeTeam": "Team account",
+    "privateServer": "Private server URL",
+    "privateServerHint": "Self-hosted or test",
+    "orgPlaceholder": "Optional, e.g. acme",
+    "orgHelp": "Enter the code shown on your OpenBrain organization page. Leave empty to use your current/default organization.",
+    "gatewayPlaceholder": "Required, e.g. http://100.64.0.8:9527",
+    "gatewayHelp": "Enter the root URL of your private OpenBrain deployment, not a /gateway path.",
+    "copyLink": "Copy Link",
+    "copied": "Copied",
+    "signIn": "Sign in",
+    "opening": "Opening…",
+    "deviceTitle": "Sign in to OpenBrain",
+    "deviceInstruction": "Enter this code in your browser to sign in:",
+    "deviceCopyCode": "Copy code",
+    "deviceCopy": "Copy",
+    "deviceOpenBrowser": "Open Browser",
+    "deviceExpires": "Code expires in {{time}}",
+    "deviceWaiting": "Waiting for authorization..."
+  },
+  "billing": {
+    "creditsRequired": "Credits required",
+    "creditsDesc": "Your plan can use AI chat, but the selected model requires credits. Open Models to choose or configure another provider model, or go to Billing to get credits.",
+    "quotaExhausted": "AI quota exhausted",
+    "quotaDesc": "Your available AI quota is exhausted for the current billing period. Open Billing to top up, change plan, or wait for quota to refresh, then retry.",
+    "chatUnavailable": "Chat Unavailable",
+    "chatUnavailableDesc": "Your account does not currently have chat access.",
+    "openModels": "Open Models",
+    "goToBilling": "Go to Billing"
+  },
+  "remote": {
+    "alias": "Alias",
+    "user": "User",
+    "host": "Host",
+    "port": "Port",
+    "password": "Password",
+    "privateKey": "Private Key",
+    "passwordKeep": "Password (leave blank to keep saved password)",
+    "passphraseOptional": "Passphrase (optional)",
+    "passphraseKeep": "Passphrase (leave blank to keep saved passphrase)",
+    "choose": "Choose",
+    "saving": "Saving..."
+  }
+}

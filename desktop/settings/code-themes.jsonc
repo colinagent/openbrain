@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "builtInVersion": 6,
+  "themes": [
+    {
+      "id": "openbrain-code-light",
+      "name": "OpenBrain Code Light",
+      "core": {
+        "brand": "#2f8f6b",
+        "brandDark": "#17604d",
+        "background": "#f4f9f7",
+        "primeText": "#000000",
+        "secondaryText": "rgba(0,0,0,0.7)",
+        "onSurface": "#000000",
+        "onSurfaceMuted": "rgba(0,0,0,0.7)"
+      },
+      "tokens": {}
+    },
+    {
+      "id": "openbrain-code-dark",
+      "name": "OpenBrain Code Dark",
+      "core": {
+        "brand": "#2f8f6b",
+        "brandDark": "#17604d",
+        "background": "#101816",
+        "primeText": "#ffffff",
+        "secondaryText": "rgba(255,255,255,0.7)",
+        "onSurface": "#000000",
+        "onSurfaceMuted": "rgba(0,0,0,0.7)"
+      },
+      "tokens": {}
+    },
+    {
+      "id": "opagent-code-light",
+      "name": "OpAgent Code Light",
+      "core": {
+        "brand": "#be7e4a",
+        "brandDark": "#8f5a2e",
+        "background": "#fcfaf4",
+        "primeText": "#000000",
+        "secondaryText": "rgba(0,0,0,0.7)",
+        "onSurface": "#000000",
+        "onSurfaceMuted": "rgba(0,0,0,0.7)"
+      },
+      "tokens": {}
+    },
+    {
+      "id": "opagent-code-dark",
+      "name": "OpAgent Code Dark",
+      "core": {
+        "brand": "#be7e4a",
+        "brandDark": "#8f5a2e",
+        "background": "#292929",
+        "primeText": "#ffffff",
+        "secondaryText": "rgba(255,255,255,0.7)",
+        "onSurface": "#000000",
+        "onSurfaceMuted": "rgba(0,0,0,0.7)"
+      },
+      "tokens": {}
+    }
+  ]
+}

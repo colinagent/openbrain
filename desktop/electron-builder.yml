@@ -1,0 +1,72 @@
+appId: io.openbrain.app
+productName: OpenBrain
+asar: true
+detectUpdateChannel: false
+npmRebuild: false
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - package.json
+  - "!node_modules/cpu-features/**"
+  - "!node_modules/ssh2/lib/protocol/crypto/build/**"
+
+extraResources:
+  - from: openbrain/
+    to: openbrain/
+  - from: settings/
+    to: settings/
+  - from: build/icon.png
+    to: build/icon.png
+
+publish:
+  provider: github
+  owner: colinagent
+  repo: openbrain
+  releaseType: release
+
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
+      arch:
+        - arm64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  timestamp: http://timestamp.apple.com/ts01
+  entitlements: scripts/entitlements.mac.plist
+  entitlementsInherit: scripts/entitlements.mac.plist
+
+dmg:
+  sign: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  artifactName: OpenBrain-Setup-${version}.${ext}
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Development
+
+# Protocol handler registration
+protocols:
+  - name: OpenBrain
+    schemes:
+      - openbrain

@@ -1,0 +1,9 @@
+{
+  // Configuration file schema version. Keep as 1 unless release notes say otherwise.
+  "version": 1,
+
+  // User-specific preferences.
+  // This template is copied to ~/.openbrain/configs/settings/user.jsonc on first run.
+  // `defaultWorkspace` may be absolute, relative to your home directory, or use ~/.
+  "defaultWorkspace": "~/.openbrain/workspace"
+}

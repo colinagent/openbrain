@@ -1,0 +1,21 @@
+{
+  "cancel": "Cancel",
+  "ok": "OK",
+  "save": "Save",
+  "close": "Close",
+  "delete": "Delete",
+  "add": "Add",
+  "back": "Back",
+  "edit": "Edit",
+  "refresh": "Refresh",
+  "retry": "Retry",
+  "quit": "Quit",
+  "loading": "Loading...",
+  "working": "Working...",
+  "creating": "Creating...",
+  "saving": "Saving...",
+  "updating": "Updating…",
+  "unknown": "unknown",
+  "untitled": "Untitled",
+  "settings": "Settings"
+}

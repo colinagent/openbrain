@@ -1,0 +1,71 @@
+{
+  "billing": {
+    "chatUnavailable": "您的账户当前无法使用对话。",
+    "creditsRequired": "所选模型需要积分。在「模型」中选择其他提供商的模型，或前往「计费」获取积分。",
+    "quotaExhausted": "当前计费周期 AI 配额已用尽。打开「计费」充值、更换套餐或等待刷新后重试。",
+    "signInFirst": "请先登录。",
+    "summaryQuota": "AI 配额已用尽。打开「计费」以继续。",
+    "summaryCredits": "所选模型需要积分。",
+    "titleQuota": "AI 配额已用尽",
+    "titleCredits": "需要积分",
+    "titleChatUnavailable": "对话不可用",
+    "actionBilling": "前往计费",
+    "actionModels": "打开模型"
+  },
+  "auth": {
+    "gatewayRequired": "请输入私有服务器 URL，例如 http://100.64.0.8:9527。",
+    "startSignInFailed": "启动登录失败。",
+    "copyLinkFailed": "复制登录链接失败。"
+  },
+  "remote": {
+    "deleteHostFailed": "删除 SSH 主机失败",
+    "saveHostFailed": "保存 SSH 主机失败",
+    "aliasRequired": "别名为必填",
+    "hostRequired": "主机为必填",
+    "userRequired": "用户为必填",
+    "portNumber": "端口必须为数字",
+    "passwordRequired": "密码为必填",
+    "keyRequired": "私钥文件为必填",
+    "connectFailed": "远程连接失败"
+  },
+  "dirPicker": {
+    "pathRequired": "路径为必填",
+    "pathAbsolute": "路径必须为绝对路径",
+    "notDirectory": "路径不是目录",
+    "fileNameRequired": "文件名为必填",
+    "providerUnavailable": "提供方不可用",
+    "createDirFailed": "创建目录失败",
+    "writeFileFailed": "写入文件失败"
+  },
+  "chat": {
+    "compactFailed": "压缩失败",
+    "submitFailed": "提交对话轮次失败",
+    "switchAgentFailed": "切换 Agent 失败",
+    "imagesNotSupported": "命令模式暂不支持图片。",
+    "selectAgentForImages": "添加图片前请选择 Agent。",
+    "saveModelFailed": "保存模型设置失败",
+    "saveThinkingFailed": "保存思考设置失败",
+    "saveFastModeFailed": "保存快速模式失败",
+    "readClipboardImageFailed": "读取剪贴板图片失败"
+  },
+  "app": {
+    "createWorkspaceFailed": "创建工作区失败。",
+    "storageSettingsFailed": "打开存储提供商设置失败。",
+    "selectOrgFailed": "选择组织失败",
+    "listOpenBrainFailed": "列出 OpenBrain 失败。",
+    "openBrainNameRequired": "OpenBrain 名称为必填。"
+  },
+  "main": {
+    "pathRequired": "路径为必填",
+    "pathAbsolute": "路径必须为绝对路径",
+    "windowNotFound": "未找到窗口",
+    "selectSshKey": "选择 SSH 私钥",
+    "specialDirWorkspace": "工作区",
+    "specialDirHome": "主目录",
+    "specialDirDesktop": "桌面",
+    "specialDirDownloads": "下载",
+    "specialDirRoot": "根目录",
+    "runtimeStartupFailed": "本地运行时启动失败",
+    "runtimeDevManaged": "开发环境运行时由 scripts/openbrain-runtime/run-dev.sh 管理。"
+  }
+}

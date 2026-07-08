@@ -1,0 +1,37 @@
+OpenBrain
+=========
+
+Copyright (c) 2026 OpAgent Inc
+
+OpenBrain is a product of OpAgent Inc. This product includes software
+developed by OpAgent Inc.
+
+Attribution
+-----------
+
+If you modify, distribute, or offer as a network service any OpenBrain
+component licensed under AGPL-3.0 (including desktop, server, agents,
+opagent-runtime, opagent-protocol, tools, and related documentation),
+you must:
+
+1. Comply with the GNU Affero General Public License v3.0, including
+   making corresponding source available when required.
+2. Retain this NOTICE file in source and binary distributions.
+3. Clearly state that your work is based on OpenBrain. For example, in
+   documentation, an About screen, or package metadata: "Based on
+   OpenBrain (https://github.com/colinagent/openbrain)" or equivalent.
+
+GBrain Integration
+------------------
+
+OpenBrain can package a GBrain CLI binary and ships a GBrain-backed agent
+integration. GBrain source is maintained outside this repository under the MIT
+License, with OpenBrain integration flowing through the public
+`colinagent/gbrain` fork of `garrytan/gbrain`.
+
+Third-Party Components
+----------------------
+
+Some files include third-party code under separate licenses (for example,
+Go MCP SDK components in opagent-protocol/go-sdk). Those files retain
+their original copyright and license notices.

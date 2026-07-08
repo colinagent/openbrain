@@ -1,0 +1,71 @@
+{
+  "billing": {
+    "chatUnavailable": "Your account does not currently have chat access.",
+    "creditsRequired": "This selected model requires credits. Choose a model from another provider in Models, or go to Billing to get credits.",
+    "quotaExhausted": "Your available AI quota is exhausted for the current billing period. Open Billing to top up, change plan, or wait for quota to refresh, then retry.",
+    "signInFirst": "Please sign in first.",
+    "summaryQuota": "AI quota exhausted. Open Billing to continue.",
+    "summaryCredits": "Selected model requires credits.",
+    "titleQuota": "AI quota exhausted",
+    "titleCredits": "Credits required",
+    "titleChatUnavailable": "Chat Unavailable",
+    "actionBilling": "Go to Billing",
+    "actionModels": "Open Models"
+  },
+  "auth": {
+    "gatewayRequired": "Enter your private server URL, for example http://100.64.0.8:9527.",
+    "startSignInFailed": "Failed to start sign in.",
+    "copyLinkFailed": "Failed to copy sign in link."
+  },
+  "remote": {
+    "deleteHostFailed": "Failed to delete SSH host",
+    "saveHostFailed": "Failed to save SSH host",
+    "aliasRequired": "Alias is required",
+    "hostRequired": "Host is required",
+    "userRequired": "User is required",
+    "portNumber": "Port must be a number",
+    "passwordRequired": "Password is required",
+    "keyRequired": "Private key file is required",
+    "connectFailed": "Remote connect failed"
+  },
+  "dirPicker": {
+    "pathRequired": "Path is required",
+    "pathAbsolute": "Path must be absolute",
+    "notDirectory": "Path is not a directory",
+    "fileNameRequired": "File name is required",
+    "providerUnavailable": "Provider unavailable",
+    "createDirFailed": "Failed to create directory",
+    "writeFileFailed": "Failed to write file"
+  },
+  "chat": {
+    "compactFailed": "Compact failed",
+    "submitFailed": "Submit chat turn failed",
+    "switchAgentFailed": "Failed to switch agent",
+    "imagesNotSupported": "Command mode does not support images yet.",
+    "selectAgentForImages": "Select an agent before adding images.",
+    "saveModelFailed": "Failed to save model settings",
+    "saveThinkingFailed": "Failed to save thinking settings",
+    "saveFastModeFailed": "Failed to save Fast mode",
+    "readClipboardImageFailed": "Failed to read image from clipboard"
+  },
+  "app": {
+    "createWorkspaceFailed": "Failed to create workspace.",
+    "storageSettingsFailed": "Failed to open storage provider settings.",
+    "selectOrgFailed": "Failed to select organization",
+    "listOpenBrainFailed": "Failed to list GBrain sources.",
+    "openBrainNameRequired": "GBrain source name is required."
+  },
+  "main": {
+    "pathRequired": "Path is required",
+    "pathAbsolute": "Path must be absolute",
+    "windowNotFound": "Window not found",
+    "selectSshKey": "Select SSH Private Key",
+    "specialDirWorkspace": "Workspace",
+    "specialDirHome": "Home",
+    "specialDirDesktop": "Desktop",
+    "specialDirDownloads": "Downloads",
+    "specialDirRoot": "Root",
+    "runtimeStartupFailed": "Local runtime startup failed",
+    "runtimeDevManaged": "Development runtime bootstrap is managed by scripts/openbrain-runtime/run-dev.sh."
+  }
+}

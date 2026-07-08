@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "themeId": "default-light",
+  "fontSize": 13,
+  "fontFamily": "",
+  "sidebarFontSize": 14,
+  "activityPanelMaxHeight": 400,
+  "markdownTextOffset": 60,
+  "markdownContentWidth": 882,
+  "markdownOutlineWidth": 260,
+  "titlebarFontSize": 13,
+  "statusbarFontSize": 11,
+  "tabBarHeight": 32,
+  "tabBarFontSize": 13,
+  "zoomLevel": 0,
+  "completion": {
+    "enabled": true,
+    "mode": "auto",
+    "customModelKey": null
+  },
+  "showLineNumbers": true,
+  "chatThinkingLevel": "off",
+  "markdownFontSize": {
+    "heading1": 1.8,
+    "heading2": 1.5,
+    "heading3": 1.25,
+    "heading4": 1.1
+  }
+}

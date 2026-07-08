@@ -1,0 +1,33 @@
+{
+  "rail": {
+    "folder": "文件夹",
+    "openbrain": "OpenBrain",
+    "agents": "Agent",
+    "skills": "技能",
+    "marketplace": "市场",
+    "tools": "工具",
+    "tasks": "任务"
+  },
+  "expand": "展开",
+  "collapse": "收起",
+  "switchDirectory": "切换目录…",
+  "refreshDirectory": "刷新目录",
+  "search": "搜索",
+  "add": "添加",
+  "newFile": "新建文件",
+  "newFolder": "新建文件夹",
+  "addAgent": "添加 Agent",
+  "addCustomAgent": "添加自定义 Agent",
+  "openBrainSignIn": "登录以加载 OpenBrain 云端",
+  "openBrainOpeningSignIn": "正在打开登录…",
+  "openBrainSourceAddingToCloud": "正在添加到 OpenBrain 云端…",
+  "openBrainSourceCreating": "正在创建 OpenBrain Source…",
+  "openBrainSourceBinding": "正在此 Runtime 上绑定…",
+  "openBrainSourceCreateFailed": "创建 OpenBrain Source 失败",
+  "openBrainSourceDismissFailed": "关闭",
+  "recent": "最近",
+  "noRecentWorkspaces": "无最近工作区",
+  "update": "更新",
+  "updating": "更新中…",
+  "waitingFileTree": "正在恢复文件树"
+}

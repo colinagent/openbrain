@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "builtInVersion": 29,
+  "themes": [
+    {
+      "id": "default-light",
+      "name": "Default Light",
+      "markdownTheme": "default-light",
+      "codeTheme": "opagent-code-light",
+      "core": {
+        "obBrand": "#be7e4a",
+        "obBrandDark": "#8f5a2e",
+        "background": "#fcfaf4",
+        "primeText": "#000000",
+        "secondaryText": "rgba(0,0,0,0.7)",
+        "onSurface": "#000000",
+        "onSurfaceMuted": "rgba(0,0,0,0.7)"
+      }
+    },
+    {
+      "id": "default-dark",
+      "name": "Default Dark",
+      "markdownTheme": "default-dark",
+      "codeTheme": "opagent-code-dark",
+      "core": {
+        "obBrand": "#be7e4a",
+        "obBrandDark": "#8f5a2e",
+        "background": "#292929",
+        "primeText": "#ffffff",
+        "secondaryText": "rgba(255,255,255,0.7)",
+        "onSurface": "#000000",
+        "onSurfaceMuted": "rgba(0,0,0,0.7)"
+      }
+    },
+    {
+      "id": "openbrain-light",
+      "name": "OpenBrain Light",
+      "markdownTheme": "openbrain-light",
+      "codeTheme": "openbrain-code-light",
+      "core": {
+        "obBrand": "#2f8f6b",
+        "obBrandDark": "#17604d",
+        "background": "#f4f9f7",
+        "primeText": "#000000",
+        "secondaryText": "rgba(0,0,0,0.7)",
+        "onSurface": "#000000",
+        "onSurfaceMuted": "rgba(0,0,0,0.7)"
+      }
+    },
+    {
+      "id": "openbrain-dark",
+      "name": "OpenBrain Dark",
+      "markdownTheme": "openbrain-dark",
+      "codeTheme": "openbrain-code-dark",
+      "core": {
+        "obBrand": "#2f8f6b",
+        "obBrandDark": "#17604d",
+        "background": "#101816",
+        "primeText": "#ffffff",
+        "secondaryText": "rgba(255,255,255,0.7)",
+        "onSurface": "#000000",
+        "onSurfaceMuted": "rgba(0,0,0,0.7)"
+      }
+    }
+  ]
+}

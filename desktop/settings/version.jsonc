@@ -1,0 +1,5 @@
+{
+  // Installed desktop settings template version.
+  // Release scripts keep this in sync with desktop/package.json.
+  "version": "0.8.16"
+}

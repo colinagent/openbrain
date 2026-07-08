@@ -1,0 +1,33 @@
+{
+  "rail": {
+    "folder": "Folder",
+    "openbrain": "OpenBrain",
+    "agents": "Agents",
+    "skills": "Skills",
+    "marketplace": "Marketplace",
+    "tools": "Tools",
+    "tasks": "Tasks"
+  },
+  "expand": "Expand",
+  "collapse": "Collapse",
+  "switchDirectory": "Switch Directory…",
+  "refreshDirectory": "Refresh Directory",
+  "search": "Search",
+  "add": "Add",
+  "newFile": "New File",
+  "newFolder": "New Folder",
+  "addAgent": "Add Agent",
+  "addCustomAgent": "Add Custom Agent",
+  "openBrainSignIn": "Sign in to load OpenBrain Cloud",
+  "openBrainOpeningSignIn": "Opening sign in...",
+  "openBrainSourceAddingToCloud": "Adding to OpenBrain Cloud…",
+  "openBrainSourceCreating": "Creating OpenBrain source…",
+  "openBrainSourceBinding": "Binding on this runtime…",
+  "openBrainSourceCreateFailed": "Failed to create OpenBrain source",
+  "openBrainSourceDismissFailed": "Dismiss",
+  "recent": "Recent",
+  "noRecentWorkspaces": "No recent workspaces",
+  "update": "Update",
+  "updating": "Updating…",
+  "waitingFileTree": "Waiting to restore the file tree"
+}

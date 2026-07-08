@@ -1,0 +1,68 @@
+{
+  "landing": {
+    "openFolder": "Open Folder",
+    "connectRemote": "Connect Remote"
+  },
+  "pinnedFile": "Pinned file",
+  "returnPinnedToEditor": "Return {{title}} to editor",
+  "newChat": "New Chat",
+  "remoteLabel": "Remote: {{host}}",
+  "noFolder": "No folder",
+  "connection": {
+    "connected": "Connected",
+    "connecting": "Connecting...",
+    "reconnecting": "Reconnecting...",
+    "disconnected": "Disconnected"
+  },
+  "dirPicker": {
+    "selectDirectory": "Select Directory",
+    "saveFile": "Save File",
+    "save": "Save",
+    "ok": "OK",
+    "close": "Close",
+    "recent": "Recent",
+    "saveAs": "Save as",
+    "working": "Working...",
+    "switchDirectory": "Switch Directory",
+    "openFolder": "Open Folder",
+    "subtitleLocal": "Local Workspace",
+    "subtitleRemote": "Remote Workspace",
+    "subtitleNewLocalTab": "New Local Workspace Tab"
+  },
+  "runtime": {
+    "setupIssue": "Runtime Setup Issue",
+    "preparing": "Preparing Built-in Runtime",
+    "checking": "Checking local runtime",
+    "current": "Current",
+    "target": "Target",
+    "notSetup": "Not set up yet",
+    "unknown": "unknown",
+    "autoContinue": "The app is setting up its built-in runtime for this machine. It will continue automatically once everything is ready.",
+    "quit": "Quit",
+    "retry": "Retry"
+  },
+  "remote": {
+    "title": "Remote SSH",
+    "add": "Add",
+    "back": "Back",
+    "close": "Close",
+    "searchPlaceholder": "Search host...",
+    "loading": "Loading...",
+    "noHosts": "No hosts found",
+    "edit": "Edit",
+    "delete": "Delete",
+    "authKey": "key",
+    "authPassword": "password"
+  },
+  "tab": {
+    "newTab": "New Tab",
+    "welcome": "Welcome",
+    "models": "Models",
+    "openBrainSettings": "OpenBrain",
+    "desktopSettings": "Desktop",
+    "dashboard": "Dashboard",
+    "marketplace": "Marketplace",
+    "settings": "Settings",
+    "organization": "Organization"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "unsaved": {
+    "title": "关闭且不保存？",
+    "body": "「{{title}}」有未保存的更改。现在关闭将丢弃这些编辑。",
+    "closeAnyway": "仍要关闭"
+  },
+  "rename": {
+    "title": "重命名",
+    "selected": "重命名所选条目",
+    "pathPrefix": "重命名：\n{{path}}"
+  },
+  "delete": {
+    "title": "删除",
+    "moveToTrash": "移到废纸篓",
+    "deletePermanently": "永久删除",
+    "file": "将文件移到废纸篓？\n\n{{path}}",
+    "folder": "将文件夹移到废纸篓？\n\n{{path}}\n\n其中所有内容也将被移动。",
+    "multi": "将 {{count}} 项移到废纸篓？",
+    "andMore": "…还有 {{count}} 项",
+    "folderContentsToo": "文件夹内容也将被移动。"
+  },
+  "importConflict": {
+    "title": "覆盖现有文件？",
+    "body": "拖放目标已包含 {{count}} 个冲突路径。\n\n目标：{{dir}}",
+    "more": "+ {{count}} 项",
+    "overwrite": "覆盖"
+  },
+  "agentExists": {
+    "title": "Agent 已存在",
+    "body": "该目录已有 Agent：\n\n{{path}}\n\n请在对话栏切换 Agent。",
+    "ok": "确定"
+  },
+  "auth": {
+    "signInRequired": "需要登录",
+    "reasonChat": "开始对话前需要先登录。",
+    "reasonCommand": "运行命令需要 OpenBrain 账户，以便运行时使用您的工作区身份。",
+    "reasonPlan": "执行计划前需要先登录。",
+    "reasonThreadControl": "控制运行中的线程需要先登录。",
+    "reasonCompact": "压缩线程需要先登录。",
+    "reasonResume": "继续此线程需要先登录。",
+    "signInLink": "登录链接",
+    "advancedOptions": "高级登录选项",
+    "orgCode": "组织代码",
+    "orgCodeTeam": "团队账户",
+    "privateServer": "私有服务器 URL",
+    "privateServerHint": "自托管或测试",
+    "orgPlaceholder": "可选，例如 acme",
+    "orgHelp": "输入 OpenBrain 组织页上的代码。留空则使用当前/默认组织。",
+    "gatewayPlaceholder": "必填，例如 http://100.64.0.8:9527",
+    "gatewayHelp": "输入私有 OpenBrain 部署的根 URL，而非 /gateway 路径。",
+    "copyLink": "复制链接",
+    "copied": "已复制",
+    "signIn": "登录",
+    "opening": "正在打开…",
+    "deviceTitle": "登录 OpenBrain",
+    "deviceInstruction": "在浏览器中输入此代码以登录：",
+    "deviceCopyCode": "复制代码",
+    "deviceCopy": "复制",
+    "deviceOpenBrowser": "打开浏览器",
+    "deviceExpires": "代码将于 {{time}} 后过期",
+    "deviceWaiting": "等待授权…"
+  },
+  "billing": {
+    "creditsRequired": "需要积分",
+    "creditsDesc": "您的套餐可使用 AI 对话，但所选模型需要积分。打开「模型」选择或配置其他提供商模型，或前往「计费」获取积分。",
+    "quotaExhausted": "AI 配额已用尽",
+    "quotaDesc": "当前计费周期的 AI 配额已用尽。打开「计费」充值、更换套餐或等待配额刷新后重试。",
+    "chatUnavailable": "对话不可用",
+    "chatUnavailableDesc": "您的账户当前无法使用对话。",
+    "openModels": "打开模型",
+    "goToBilling": "前往计费"
+  },
+  "remote": {
+    "alias": "别名",
+    "user": "用户",
+    "host": "主机",
+    "port": "端口",
+    "password": "密码",
+    "privateKey": "私钥",
+    "passwordKeep": "密码（留空保留已保存密码）",
+    "passphraseOptional": "口令（可选）",
+    "passphraseKeep": "口令（留空保留已保存口令）",
+    "choose": "选择",
+    "saving": "保存中…"
+  }
+}
