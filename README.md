@@ -1,10 +1,32 @@
 # OpenBrain
 
-OpenBrain is a public monorepo for the OpAgent runtime, protocol, agents,
-tools, server, and desktop client. It integrates with the public GBrain project
-through the built-in GBrain agent and packaged CLI release assets.
+[中文 README](./README.zh-CN.md)
 
-## Repository Layout
+> **GBrain, ready to use.**
+
+OpenBrain gives GBrain a GUI and agent runtime.
+
+[Download](https://openbrain.chat/download) · [Website](https://openbrain.chat) · [GitHub](https://github.com/colinagent/openbrain)
+
+## Connect other GBrains
+
+Connect sources and peer brains. In practice, connected brains are queried on demand as subagents.
+
+![Personal and team brain connections](docs/assets/大脑互联图.png)
+
+## GBrain Agent
+
+**Use GBrain as a subagent**
+
+Keep your main agent focused.
+
+## Ready to use. Zero setup.
+
+Download OpenBrain and start with GBrain — no extra wiring.
+
+[Download OpenBrain](https://openbrain.chat/download)
+
+## Repository layout
 
 - `agents/`: built-in product agents. `agents/coder` is the default coding
   agent; `agents/gbrain` is the GBrain-backed knowledge agent.
