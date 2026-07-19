@@ -8,11 +8,11 @@ const source = readFileSync(
   'utf8',
 );
 
-test('public brain directory supports subscribe and unsubscribe actions', () => {
-  assert.match(source, /onUnsubscribePublicBrain: \(ownerUID: string\) => Promise<void>;/);
-  assert.match(source, /entry\.subscribed\s*\?\s*onUnsubscribePublicBrain\(entry\.ownerUID\)\s*:\s*onSubscribePublicBrain\(entry\.ownerUID\)/);
-  assert.doesNotMatch(source, /disabled=\{actionBusy \|\| busy \|\| entry\.subscribed\}/);
-  assert.match(source, /\{entry\.subscribed \? 'Remove' : '\+'\}/);
+test('public brain directory supports follow and unfollow actions', () => {
+  assert.match(source, /onUnfollowPublicBrain: \(ownerUID: string\) => Promise<void>;/);
+  assert.match(source, /entry\.followed\s*\? onUnfollowPublicBrain\(entry\.ownerUID\)\s*:\s*onFollowPublicBrain\(entry\.ownerUID\)/);
+  assert.doesNotMatch(source, /entry\.subscribed/);
+  assert.match(source, /entry\.followed \? 'Unfollow' : 'Follow'/);
   assert.match(source, /\{entry\.name\}/);
   assert.match(source, /entry\.avatar/);
   assert.match(source, /PublicBrainDirectoryAvatar/);

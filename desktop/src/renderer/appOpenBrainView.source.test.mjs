@@ -120,15 +120,15 @@ test('OpenBrain sidebar add source supports local and remote folders', () => {
   assert.match(openBrainServiceSource, /params\.set\('includeSelf', 'true'\);/);
   assert.match(openBrainStoreSource, /owned: boolean;/);
   assert.match(openBrainStoreSource, /owned: entry\.owned === true/);
-  assert.match(openBrainStoreSource, /\(entry\.subscribed \|\| entry\.owned\) && publicBrainHasActiveSources\(entry\)/);
+  assert.match(openBrainStoreSource, /\(entry\.followed \|\| entry\.owned \|\| entry\.member\) && publicBrainHasActiveSources\(entry\)/);
   assert.match(openBrainStoreSource, /listOpenBrainPublicBrains\('', workspaceTabId, \{ includeSelf: true \}\)/);
   assert.match(openBrainStoreSource, /listOpenBrainPublicBrains\(query, undefined, \{ includeSelf: true \}\)/);
-  assert.match(openBrainServiceSource, /resolveOpenBrainPublicBrainSources/);
-  assert.match(openBrainServiceSource, /\/v1\/openbrain\/cloud\/public-brains\/\$\{encodeURIComponent\(trimmed\)\}\/sources/);
-  assert.match(openBrainStoreSource, /loadSubscribedPublicBrainsForStore/);
+  assert.doesNotMatch(openBrainServiceSource, /resolveOpenBrainPublicBrainSources/);
+  assert.doesNotMatch(openBrainServiceSource, /public-brains\/.+\/sources/);
+  assert.match(openBrainStoreSource, /loadFollowedPublicBrainsForStore/);
   assert.match(openBrainStoreSource, /publicBrains: provider === 'local' \? \[\] : get\(\)\.publicBrains/);
   assert.match(openBrainStoreSource, /catch \{[\s\S]*publicBrains: current,[\s\S]*loaded: false,/);
-  assert.doesNotMatch(openBrainStoreSource, /fallback: SubscribedPublicBrain\[\]/);
+  assert.doesNotMatch(openBrainStoreSource, /SubscribedPublicBrain/);
   assert.match(addPopoverSource, /entry\.owned \? \(/);
   assert.match(addPopoverSource, /entry\.owned[\s\S]*\? Promise\.resolve\(\)/);
   assert.match(openBrainStoreSource, /const request = \{[\s\S]*name: trimmedName,[\s\S]*localPath: targetPath,/s);
@@ -214,7 +214,7 @@ test('OpenBrain sidebar removes sources without deleting local files', () => {
   assert.doesNotMatch(openBrainPageSource, /NODE_SINGLE_CLICK_DELAY_MS/);
   assert.doesNotMatch(openBrainPageSource, /scheduleNodeSingleClick/);
   assert.match(openBrainPageSource, /const disconnectPublicBrain = useCallback/);
-  assert.match(openBrainPageSource, /unsubscribePublicBrain\(ownerUID\)/);
+  assert.match(openBrainPageSource, /unfollowPublicBrain\(ownerUID\)/);
   assert.match(openBrainPageSource, /setSourceLinked\(sourceKey, !isSourceLinked\(sourceKey\)\)/);
   assert.match(openBrainPageSource, /disconnectPublicBrain\(node\)/);
   assert.match(openBrainPageSource, /startPublicBrainChat\(node\)/);
@@ -400,7 +400,7 @@ test('OpenBrain chat uses provider source context and retrieval APIs', () => {
 
   assert.match(chatStoreSource, /export type GBrainQueryScope/);
   assert.match(chatStoreSource, /kind: 'source';[\s\S]*sourceID: string;/);
-  assert.match(chatStoreSource, /kind: 'publicBrain';[\s\S]*ownerUID: string;[\s\S]*sources: GBrainQueryScopePublicSource\[\];/);
+  assert.doesNotMatch(chatStoreSource, /kind: 'publicBrain'/);
   assert.match(openBrainStoreSource, /sourceID: string;/);
   assert.match(openBrainStoreSource, /runtimeReachable\?: boolean;/);
   assert.doesNotMatch(openBrainStoreSource, /runtimeTabId\?: string;/);
@@ -458,12 +458,13 @@ test('OpenBrain chat uses provider source context and retrieval APIs', () => {
   assert.doesNotMatch(pageSource, /publicBrainScopeForNode/);
   assert.doesNotMatch(pageSource, /publicBrainByOwnerUID/);
   assert.match(pageSource, /\.filter\(\(brain\) => brain\.activeSourceCount > 0\)/);
-  assert.match(pageSource, /const sources = await resolveOpenBrainPublicBrainSources\(ownerUID\);/);
-  assert.match(pageSource, /publicBrainScopeForBrain\(\{[\s\S]*ownerUID,[\s\S]*sources,[\s\S]*\}, node\.label\)/);
-  assert.match(pageSource, /openingPublicBrainOwnerUIDRef/);
+  assert.match(pageSource, /setHostedChatBrain\(\{ brainID: brain\.brainID, name: brain\.name, username: brain\.username \}\)/);
+  assert.match(pageSource, /<PublicBrainHostedChatDialog/);
+  assert.doesNotMatch(pageSource, /resolveOpenBrainPublicBrainSources/);
+  assert.doesNotMatch(pageSource, /openingPublicBrainOwnerUIDRef/);
   assert.doesNotMatch(pageSource, /node\.publicBrainSources/);
   assert.doesNotMatch(pageSource, /Public brain source IDs are not loaded yet/);
-  assert.match(pageSource, /This public brain does not have available public sources yet\./);
+  assert.match(pageSource, /This public brain is not available\./);
   assert.match(pageSource, /chatState\.setGBrainQueryScope\(options\?\.scope \|\| null\);/);
   assert.doesNotMatch(chatServiceSource, /import \{ queryOpenBrain \} from '\.\/openBrainService';/);
   assert.doesNotMatch(chatServiceSource, /queryOpenBrain\(\{/);

@@ -149,32 +149,25 @@ export type OpenBrainSourceShare = {
   } | null;
 };
 
-export type OpenBrainPublicBrainSource = {
-  sourceID: string;
-  name?: string;
-  workspaceID?: string;
-  orgID?: string;
-};
-
 export type OpenBrainPublicBrainEntry = {
-  ownerUID: string;
+	brainID: string;
+	ownerUID: string;
   name: string;
   username: string;
   ownerInitial?: string;
   avatar?: string;
   activeSourceCount: number;
-  subscribed: boolean;
-  owned?: boolean;
-  description?: string;
-  sources?: OpenBrainPublicBrainSource[];
+	followed: boolean;
+	owned?: boolean;
+	description?: string;
+  accessMode?: 'public' | 'members_only';
+  member?: boolean;
+  offer?: { offerID: string; unitAmountU: string; currency: 'usd'; interval: 'month'; checkoutAvailable: boolean; includesAIUsage: false };
+  membership?: { membershipID: string; status: string; currentPeriodEnd?: string; cancelAtPeriodEnd: boolean; includesAIUsage: false };
 };
 
 export type OpenBrainPublicBrainsResponse = {
   brains: OpenBrainPublicBrainEntry[];
-};
-
-export type OpenBrainPublicBrainSourcesResponse = {
-  sources: OpenBrainPublicBrainSource[];
 };
 
 export type OpenBrainPublicBrainProfile = {
@@ -227,10 +220,12 @@ async function readJSONResponse<T>(res: Response): Promise<T> {
     }
   }
   if (!res.ok) {
-    const message = typeof (payload as { error?: unknown }).error === 'string'
-      ? (payload as { error: string }).error
+    const errorPayload = payload as { code?: unknown; error?: unknown };
+    const message = typeof errorPayload.error === 'string'
+      ? errorPayload.error
       : (trimmed || `Request failed: ${res.status}`);
-    throw new Error(message);
+    const code = typeof errorPayload.code === 'string' ? errorPayload.code.trim() : '';
+    throw new Error(code ? `${code}: ${message}` : message);
   }
   return payload as T;
 }
@@ -466,40 +461,168 @@ export async function listOpenBrainPublicBrains(
   return Array.isArray(result?.brains) ? result.brains : [];
 }
 
-export async function resolveOpenBrainPublicBrainSources(
-  ownerUID: string,
-  workspaceTabId?: string,
-): Promise<OpenBrainPublicBrainSource[]> {
-  const trimmed = ownerUID.trim();
-  if (!trimmed) {
-    return [];
-  }
-  const result = await getJSON<OpenBrainPublicBrainSourcesResponse>(
-    `/v1/openbrain/cloud/public-brains/${encodeURIComponent(trimmed)}/sources`,
-    workspaceTabId,
-  );
-  return Array.isArray(result?.sources) ? result.sources : [];
-}
-
-export async function subscribeOpenBrainPublicBrain(
-  ownerUID: string,
-  workspaceTabId?: string,
+export async function followOpenBrainPublicBrain(
+	ownerUID: string,
+	workspaceTabId?: string,
 ): Promise<OpenBrainPublicBrainEntry> {
-  return putJSON<OpenBrainPublicBrainEntry>(
-    `/v1/openbrain/cloud/public-brains/${encodeURIComponent(ownerUID.trim())}/subscription`,
+	return putJSON<OpenBrainPublicBrainEntry>(
+		`/v1/openbrain/cloud/public-brains/${encodeURIComponent(ownerUID.trim())}/follow`,
     {},
     workspaceTabId,
   );
 }
 
-export async function unsubscribeOpenBrainPublicBrain(
+export async function unfollowOpenBrainPublicBrain(
   ownerUID: string,
   workspaceTabId?: string,
 ): Promise<OpenBrainMutationResponse> {
   return deleteJSON<OpenBrainMutationResponse>(
-    `/v1/openbrain/cloud/public-brains/${encodeURIComponent(ownerUID.trim())}/subscription`,
+		`/v1/openbrain/cloud/public-brains/${encodeURIComponent(ownerUID.trim())}/follow`,
     workspaceTabId,
   );
+}
+
+export type OpenBrainPublicBrainConversation = {
+	conversationId: string;
+	brainId: string;
+	executionMode: 'hosted' | 'runtime_byok';
+	profileId: string;
+	expiresAt: string;
+};
+
+export type OpenBrainPublicBrainFunding = {
+	kind: 'free_daily' | 'ai_balance' | 'owner_preview';
+	authorizedMaxDebitU?: string;
+	actualDebitU?: string;
+	retailCostU?: string;
+	balanceU?: string;
+	remaining?: number;
+	limit?: number;
+	resetsAt?: string;
+};
+
+export type OpenBrainPublicBrainQuote = {
+	quoteId: string;
+	conversationId: string;
+	profileId: string;
+	pricingVersion: string;
+	currency: 'usd';
+	maxAuthorizedDebitU: string;
+	maxAuthorizedDebitMicrousd: number;
+	expiresAt: string;
+	funding: OpenBrainPublicBrainFunding;
+};
+
+export type OpenBrainPublicBrainTurnEvent = {
+	type: 'accepted' | 'retrieving' | 'synthesizing' | 'complete' | 'error';
+	turnId?: string;
+	answer?: string;
+	citations?: Array<{ citationId: string; title: string; excerpt?: string }>;
+	funding?: OpenBrainPublicBrainFunding;
+	code?: string;
+	retryable?: boolean;
+};
+
+export type OpenBrainPublicBrainBYOKResult = {
+	answer: string;
+	citations: Array<{ citationId: string; title: string; excerpt?: string }>;
+	funding: OpenBrainPublicBrainFunding;
+	executionMode: 'runtime_byok';
+	modelKey?: string;
+	modelRan: boolean;
+	billingResponsibility: 'external_provider';
+	evidenceCompleted: boolean;
+};
+
+export type OpenBrainRuntimeModels = {
+	models: Array<{ key: string; name: string; provider: string }>;
+	defaultModelKey: string;
+};
+
+export async function listOpenBrainRuntimeModels(workspaceTabId?: string): Promise<OpenBrainRuntimeModels> {
+	return getJSON<OpenBrainRuntimeModels>('/v1/openbrain/runtime/models', workspaceTabId);
+}
+
+export async function createOpenBrainPublicBrainConversation(
+	brainID: string,
+	executionMode: 'hosted' | 'runtime_byok' = 'hosted',
+	workspaceTabId?: string,
+): Promise<OpenBrainPublicBrainConversation> {
+	return postJSON<OpenBrainPublicBrainConversation>(
+		`/v1/openbrain/cloud/public-brains/${encodeURIComponent(brainID.trim())}/conversations`,
+		{ executionMode },
+		workspaceTabId,
+	);
+}
+
+export async function runOpenBrainPublicBrainBYOKTurn(
+	brainID: string,
+	conversationID: string,
+	input: {
+		turnId: string;
+		quoteId: string;
+		question: string;
+		maxAuthorizedDebitMicrousd: number;
+		modelKey: string;
+		history?: Array<{ role: 'user' | 'assistant'; text: string }>;
+	},
+	workspaceTabId?: string,
+): Promise<OpenBrainPublicBrainBYOKResult> {
+	return postJSON<OpenBrainPublicBrainBYOKResult>(
+		`/v1/openbrain/cloud/public-brains/${encodeURIComponent(brainID.trim())}/conversations/${encodeURIComponent(conversationID.trim())}/byok-turns`,
+		input,
+		workspaceTabId,
+	);
+}
+
+export async function quoteOpenBrainPublicBrainTurn(
+	brainID: string,
+	conversationID: string,
+	question: string,
+	workspaceTabId?: string,
+): Promise<OpenBrainPublicBrainQuote> {
+	return postJSON<OpenBrainPublicBrainQuote>(
+		`/v1/openbrain/cloud/public-brains/${encodeURIComponent(brainID.trim())}/conversations/${encodeURIComponent(conversationID.trim())}/turn-quotes`,
+		{ question },
+		workspaceTabId,
+	);
+}
+
+export async function runOpenBrainPublicBrainTurn(
+	brainID: string,
+	conversationID: string,
+	input: { turnId: string; quoteId: string; question: string; maxAuthorizedDebitMicrousd: number },
+	onEvent: (event: OpenBrainPublicBrainTurnEvent) => void,
+	workspaceTabId?: string,
+): Promise<void> {
+	const response = await fetch(
+		`${resolveOpenBrainBaseUrl(workspaceTabId)}/v1/openbrain/cloud/public-brains/${encodeURIComponent(brainID.trim())}/conversations/${encodeURIComponent(conversationID.trim())}/turns`,
+		{ method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify(input) },
+	);
+	if (!response.ok || !response.body) {
+		await readJSONResponse(response);
+		throw new Error('Public brain turn stream is unavailable.');
+	}
+	const reader = response.body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
+	try {
+		for (;;) {
+			const { done, value } = await reader.read();
+			buffer += decoder.decode(value || new Uint8Array(), { stream: !done }).replace(/\r\n/g, '\n');
+			let boundary = buffer.indexOf('\n\n');
+			while (boundary >= 0) {
+				const block = buffer.slice(0, boundary);
+				buffer = buffer.slice(boundary + 2);
+				const data = block.split('\n').filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).join('\n');
+				if (data) onEvent(JSON.parse(data) as OpenBrainPublicBrainTurnEvent);
+				boundary = buffer.indexOf('\n\n');
+			}
+			if (done) break;
+		}
+	} finally {
+		reader.releaseLock();
+	}
 }
 
 export type OpenBrainProviderStatus = {

@@ -240,7 +240,7 @@ func TestCloudListPublicBrainsForwardsIncludeSelf(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer session-token" {
 			t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))
 		}
-		_, _ = w.Write([]byte(`{"brains":[{"ownerUID":"user-bob","name":"OpenBrain","username":"openbrain","activeSourceCount":1,"subscribed":false,"owned":true,"sources":[{"sourceID":"ws-alpha"}]}]}`))
+		_, _ = w.Write([]byte(`{"brains":[{"brainID":"brain-open","ownerUID":"user-bob","name":"OpenBrain","username":"openbrain","activeSourceCount":1,"followed":false,"owned":true}]}`))
 	}))
 	defer upstream.Close()
 
@@ -251,33 +251,58 @@ func TestCloudListPublicBrainsForwardsIncludeSelf(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/v1/openbrain/cloud/public-brains?query=Open&includeSelf=true", nil)
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"owned":true`) || !strings.Contains(rr.Body.String(), `"sourceID":"ws-alpha"`) {
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"brainID":"brain-open"`) || !strings.Contains(rr.Body.String(), `"owned":true`) {
 		t.Fatalf("status/body = %d/%s", rr.Code, rr.Body.String())
 	}
 }
 
-func TestCloudResolvePublicBrainSourcesForwardsOwnerUID(t *testing.T) {
+func TestCloudFollowPublicBrainForwardsOwnerUID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/me/brain/public-brains/user-alice/sources" {
+		if r.Method != http.MethodPut || r.URL.Path != "/v1/me/brain/public-brains/user-alice/follow" {
 			t.Fatalf("unexpected URL %s", r.URL.String())
 		}
 		if r.Header.Get("Authorization") != "Bearer session-token" {
 			t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))
 		}
-		_, _ = w.Write([]byte(`{"sources":[{"sourceID":"ws-alpha","workspaceID":"ws-alpha","orgID":"cloud","name":"Alpha"}]}`))
+		_, _ = w.Write([]byte(`{"brainID":"brain-alice","ownerUID":"user-alice","name":"Alice","username":"alice","activeSourceCount":1,"followed":true}`))
 	}))
 	defer upstream.Close()
 
 	handler := NewHandler(newCloudTestService(t, upstream.URL))
 	router := gin.New()
-	router.GET("/v1/openbrain/cloud/public-brains/:ownerUID/sources", handler.CloudResolvePublicBrainSources)
+	router.PUT("/v1/openbrain/cloud/public-brains/:ownerUID/follow", handler.CloudFollowPublicBrain)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/openbrain/cloud/public-brains/user-alice/sources", nil)
+	req := httptest.NewRequest(http.MethodPut, "/v1/openbrain/cloud/public-brains/user-alice/follow", strings.NewReader(`{}`))
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"sourceID":"ws-alpha"`) {
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"followed":true`) {
 		t.Fatalf("status/body = %d/%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestCloudRunPublicBrainTurnStreamsHostedEvents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/public-brains/brain-alice/conversations/conversation-1/turns" {
+			t.Fatalf("unexpected URL %s", r.URL.String())
+		}
+		if r.Header.Get("Authorization") != "Bearer session-token" || r.Header.Get("Accept") != "text/event-stream" {
+			t.Fatalf("unexpected auth/accept headers: %q %q", r.Header.Get("Authorization"), r.Header.Get("Accept"))
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("event: complete\ndata: {\"type\":\"complete\",\"answer\":\"Hosted answer\"}\n\n"))
+	}))
+	defer upstream.Close()
+
+	handler := NewHandler(newCloudTestService(t, upstream.URL))
+	router := gin.New()
+	router.POST("/v1/openbrain/cloud/public-brains/:brainID/conversations/:conversationID/turns", handler.CloudRunPublicBrainTurn)
+	req := httptest.NewRequest(http.MethodPost, "/v1/openbrain/cloud/public-brains/brain-alice/conversations/conversation-1/turns", strings.NewReader(`{"question":"hello"}`))
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK || rr.Header().Get("Content-Type") != "text/event-stream" || !strings.Contains(rr.Body.String(), "Hosted answer") {
+		t.Fatalf("status/headers/body = %d/%v/%s", rr.Code, rr.Header(), rr.Body.String())
 	}
 }
 

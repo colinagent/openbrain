@@ -47,6 +47,7 @@ const (
 	OpThreadReviewRollback   OpCode = "thread/review/rollback"
 	OpEditorCompletion       OpCode = "editor/completion"
 	OpEditorCompletionCancel OpCode = "editor/completion/cancel"
+	OpRuntimeEvidenceAnswer  OpCode = "runtime/evidence-answer"
 	OpThreadSubmit           OpCode = "thread/submit"
 	OpThreadCompact          OpCode = "thread/compact"
 	OpThreadInterrupted      OpCode = "thread/interrupted"

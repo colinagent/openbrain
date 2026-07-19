@@ -559,6 +559,39 @@ func (s *Service) ProxyCloudAPI(ctx context.Context, method string, endpoint str
 	return res.StatusCode, raw
 }
 
+// OpenCloudAPIStream opens an authenticated Cloud response without buffering
+// it. The caller owns and must close the returned body. It is used for bounded
+// server-sent event APIs so a local or remote workspace tab preserves the same
+// streaming behavior as the Web client.
+func (s *Service) OpenCloudAPIStream(ctx context.Context, method string, endpoint string, rawBody []byte) (*http.Response, error) {
+	auth, err := s.loadAuth()
+	if err != nil {
+		return nil, err
+	}
+	base := strings.TrimRight(auth.gateway(), "/")
+	if base == "" {
+		return nil, errors.New("OpenBrain API URL is not configured")
+	}
+	endpoint = strings.TrimSpace(endpoint)
+	if !strings.HasPrefix(endpoint, "/v1/public-brains/") {
+		return nil, errors.New("invalid streaming OpenBrain Cloud endpoint")
+	}
+	var body io.Reader
+	if len(rawBody) > 0 {
+		body = bytes.NewReader(rawBody)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, base+endpoint, body)
+	if err != nil {
+		return nil, err
+	}
+	setAuthHeaders(req, auth)
+	req.Header.Set("Accept", "text/event-stream")
+	if len(rawBody) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return http.DefaultClient.Do(req)
+}
+
 func cloudAPIErrorBody(code string, message string) []byte {
 	raw, _ := json.Marshal(map[string]interface{}{
 		"success": false,

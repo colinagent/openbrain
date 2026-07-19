@@ -88,6 +88,8 @@ func OpNodeHandler(ctx context.Context, req *op.OpNodeRequest) (*op.OpNodeResult
 		return OpEditorCompletionHandler(ctx, req)
 	case op.OpEditorCompletionCancel:
 		return OpEditorCompletionCancelHandler(req)
+	case op.OpRuntimeEvidenceAnswer:
+		return OpRuntimeEvidenceAnswerHandler(ctx, req)
 	case op.OpThreadSubmit:
 		return OpThreadSubmitHandler(ctx, req)
 	case cronOpList:

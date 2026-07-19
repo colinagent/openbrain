@@ -5,10 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../../store/appStore';
 import { useAuthStore } from '../../store/authStore';
 import { useChatWorkspaceStore, type GBrainQueryScope } from '../../store/chatWorkspaceStore';
-import { canManageOpenBrainSource, useOpenBrainStore, type LocalOpenBrainWorkspace, type PublicBrainSource } from '../../store/openBrainStore';
+import { canManageOpenBrainSource, useOpenBrainStore, type LocalOpenBrainWorkspace } from '../../store/openBrainStore';
 import { showLoginRequiredDialog } from '../../store/loginRequiredStore';
 import { useToastStore } from '../../store/toastStore';
-import { resolveOpenBrainPublicBrainSources, type OpenBrainPublicBrainProfile, type OpenBrainSourceShare } from '../../services/openBrainService';
+import { type OpenBrainPublicBrainProfile, type OpenBrainSourceShare } from '../../services/openBrainService';
 import type { ChatAgentTarget } from '../../utils/chatAgentTarget';
 import { PopupMenu, PopupMenuItem, PopupMenuSeparator } from '../PopupMenu';
 import { ChatLineIcon, RefreshIcon, TrashIcon } from '../Icons';
@@ -22,6 +22,7 @@ import {
 } from './CloudSourceActions';
 import { OpenBrainFlowGraph, type OpenBrainFlowSourceContextMenuEvent, type OpenBrainRenderedFlowNode } from './OpenBrainFlowGraph';
 import { MyGBrainAddPopover } from './MyGBrainAddPopover';
+import { PublicBrainHostedChatDialog } from './PublicBrainHostedChatDialog';
 import { SourceShareDialog } from './SourceShareDialog';
 import {
   buildOpenBrainFlow,
@@ -50,13 +51,6 @@ type PeerContextMenuState = {
   node: OpenBrainInteractiveNode;
   x: number;
   y: number;
-};
-
-type PublicBrainScopeBrain = {
-  ownerUID: string;
-  name: string;
-  username?: string;
-  sources: PublicBrainSource[];
 };
 
 const SOURCE_CONTEXT_MENU_WIDTH = 288;
@@ -122,15 +116,6 @@ function stableOpenBrainWorkspaceID(workspace: LocalOpenBrainWorkspace): string 
   return `workspace-${(hash >>> 0).toString(16).padStart(8, '0')}`;
 }
 
-function publicBrainContextLabel(name: string | undefined, fallback: string | undefined): string {
-  const base = (name || fallback || 'Public Brain').trim() || 'Public Brain';
-  const lower = base.toLowerCase();
-  if (lower.endsWith("'s brain") || lower.endsWith(' brain')) {
-    return base;
-  }
-  return `${base}'s Brain`;
-}
-
 function gbrainSourceScopeForWorkspace(workspace: LocalOpenBrainWorkspace): GBrainQueryScope {
   const sourceID = stableOpenBrainWorkspaceID(workspace);
   return {
@@ -142,41 +127,12 @@ function gbrainSourceScopeForWorkspace(workspace: LocalOpenBrainWorkspace): GBra
   };
 }
 
-function publicBrainSourcesForScope(sources: PublicBrainSource[] | undefined) {
-  return (sources || [])
-    .map((source) => ({
-      sourceID: (source.sourceID || '').trim(),
-      name: (source.name || '').trim() || undefined,
-      workspaceID: (source.workspaceID || source.sourceID || '').trim() || undefined,
-      orgID: (source.orgID || '').trim() || undefined,
-    }))
-    .filter((source) => source.sourceID);
-}
-
 function publicBrainOwnerUIDForNode(node: OpenBrainInteractiveNode): string {
   return (node.ownerUID || (node.id.startsWith('public:') ? node.id.slice('public:'.length) : '')).trim();
 }
 
 function sourceLinkKeyForWorkspace(workspace: LocalOpenBrainWorkspace): string {
   return (workspace.sourceID || workspace.workspaceID || workspace.path || '').trim();
-}
-
-function publicBrainScopeForBrain(brain: PublicBrainScopeBrain, fallbackLabel?: string): GBrainQueryScope | null {
-  const ownerUID = brain.ownerUID.trim();
-  if (!ownerUID) {
-    return null;
-  }
-  const sourcesForScope = publicBrainSourcesForScope(brain.sources);
-  if (sourcesForScope.length === 0) {
-    return null;
-  }
-  return {
-    kind: 'publicBrain',
-    label: publicBrainContextLabel(fallbackLabel || brain.name, ownerUID),
-    ownerUID,
-    username: (brain.username || '').trim() || undefined,
-    sources: sourcesForScope,
-  };
 }
 
 async function waitForWorkspaceConnection(timeoutMs = 5000): Promise<boolean> {
@@ -203,8 +159,8 @@ export const OpenBrainPage: React.FC<OpenBrainPageProps> = ({ onOpenWorkspace, o
   const togglePeerLink = useOpenBrainStore((state) => state.togglePeerLink);
   const setSourceLinked = useOpenBrainStore((state) => state.setSourceLinked);
   const isSourceLinked = useOpenBrainStore((state) => state.isSourceLinked);
-  const subscribePublicBrain = useOpenBrainStore((state) => state.subscribePublicBrain);
-  const unsubscribePublicBrain = useOpenBrainStore((state) => state.unsubscribePublicBrain);
+  const followPublicBrain = useOpenBrainStore((state) => state.followPublicBrain);
+  const unfollowPublicBrain = useOpenBrainStore((state) => state.unfollowPublicBrain);
   const listPublicBrainDirectory = useOpenBrainStore((state) => state.listPublicBrainDirectory);
   const getSourceShare = useOpenBrainStore((state) => state.getSourceShare);
   const shareSourceWithUser = useOpenBrainStore((state) => state.shareSourceWithUser);
@@ -244,10 +200,10 @@ export const OpenBrainPage: React.FC<OpenBrainPageProps> = ({ onOpenWorkspace, o
   const [shareDialogBusy, setShareDialogBusy] = useState(false);
   const [shareDialogError, setShareDialogError] = useState<string | null>(null);
   const [sourceActionError, setSourceActionError] = useState<string | null>(null);
+  const [hostedChatBrain, setHostedChatBrain] = useState<{ brainID: string; name: string; username: string } | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const coreRef = useRef<HTMLButtonElement | null>(null);
   const providerStatusRefreshInFlightRef = useRef(false);
-  const openingPublicBrainOwnerUIDRef = useRef<string | null>(null);
   const lastAuthRevisionRef = useRef(authRevision);
 
   useEffect(() => {
@@ -350,6 +306,7 @@ export const OpenBrainPage: React.FC<OpenBrainPageProps> = ({ onOpenWorkspace, o
     () => publicBrains
       .filter((brain) => brain.activeSourceCount > 0)
       .map((brain) => ({
+        brainID: brain.brainID,
         ownerUID: brain.ownerUID,
         name: brain.name,
         username: brain.username,
@@ -357,7 +314,7 @@ export const OpenBrainPage: React.FC<OpenBrainPageProps> = ({ onOpenWorkspace, o
         avatar: brain.avatar,
         activeSourceCount: brain.activeSourceCount,
         colorKey: brain.colorKey,
-        sources: brain.sources,
+        accessMode: brain.member ? 'member' : brain.offer ? `${brain.offer.unitAmountU} U/mo` : undefined,
       })),
     [publicBrains],
   );
@@ -490,10 +447,10 @@ export const OpenBrainPage: React.FC<OpenBrainPageProps> = ({ onOpenWorkspace, o
       togglePeerLink(node.id);
       return;
     }
-    void unsubscribePublicBrain(ownerUID)
+    void unfollowPublicBrain(ownerUID)
       .then(() => pushToast('Public brain disconnected.'))
       .catch((error) => pushToast(error instanceof Error ? error.message : 'Failed to disconnect public brain.'));
-  }, [pushToast, showDemoGraph, togglePeerLink, unsubscribePublicBrain]);
+  }, [pushToast, showDemoGraph, togglePeerLink, unfollowPublicBrain]);
 
   const workspaceForNode = useCallback((node: OpenBrainInteractiveNode): LocalOpenBrainWorkspace | null => (
     (node.instanceID && node.sourceID ? workspaceByID.get(`${node.instanceID}:${node.sourceID}`) : null)
@@ -512,47 +469,18 @@ export const OpenBrainPage: React.FC<OpenBrainPageProps> = ({ onOpenWorkspace, o
     void startOpenBrainChat(workspace, { scope: gbrainSourceScopeForWorkspace(workspace) });
   }, [pushToast, startOpenBrainChat]);
 
-  const resolvePublicBrainScopeForNode = useCallback(async (node: OpenBrainInteractiveNode): Promise<GBrainQueryScope | null> => {
-    const ownerUID = publicBrainOwnerUIDForNode(node);
-    if (!ownerUID) {
-      return null;
-    }
-    const sources = await resolveOpenBrainPublicBrainSources(ownerUID);
-    return publicBrainScopeForBrain({
-      ownerUID,
-      name: node.label || ownerUID,
-      username: node.username,
-      sources,
-    }, node.label);
-  }, []);
-
   const startPublicBrainChat = useCallback((node: OpenBrainInteractiveNode) => {
     const ownerUID = publicBrainOwnerUIDForNode(node);
-    if (!ownerUID) {
+    const brain = publicBrains.find((candidate) => (
+      (node.brainID && candidate.brainID === node.brainID)
+      || (ownerUID && candidate.ownerUID === ownerUID)
+    ));
+    if (!brain?.brainID) {
       pushToast('This public brain is not available.');
       return;
     }
-    if (openingPublicBrainOwnerUIDRef.current === ownerUID) {
-      return;
-    }
-    openingPublicBrainOwnerUIDRef.current = ownerUID;
-    void (async () => {
-      try {
-        const scope = await resolvePublicBrainScopeForNode(node);
-        if (!scope) {
-          pushToast('This public brain does not have available public sources yet.');
-          return;
-        }
-        await startOpenBrainChat(null, { scope });
-      } catch (error) {
-        pushToast(error instanceof Error ? error.message : 'Failed to open public brain chat.');
-      } finally {
-        if (openingPublicBrainOwnerUIDRef.current === ownerUID) {
-          openingPublicBrainOwnerUIDRef.current = null;
-        }
-      }
-    })();
-  }, [pushToast, resolvePublicBrainScopeForNode, startOpenBrainChat]);
+    setHostedChatBrain({ brainID: brain.brainID, name: brain.name, username: brain.username });
+  }, [publicBrains, pushToast]);
 
   const loadSourceShareDialog = useCallback(async (workspace: LocalOpenBrainWorkspace) => {
     const [share, profile] = await Promise.all([
@@ -1254,8 +1182,8 @@ export const OpenBrainPage: React.FC<OpenBrainPageProps> = ({ onOpenWorkspace, o
               busy={onboardingBusy}
               onClose={() => setAddPopoverOpen(false)}
               onCreateSource={onCreateSource}
-              onSubscribePublicBrain={subscribePublicBrain}
-              onUnsubscribePublicBrain={unsubscribePublicBrain}
+              onFollowPublicBrain={followPublicBrain}
+              onUnfollowPublicBrain={unfollowPublicBrain}
               listPublicBrainDirectory={listPublicBrainDirectory}
               onLogin={async () => {
                 const result = await startLogin();
@@ -1448,6 +1376,12 @@ export const OpenBrainPage: React.FC<OpenBrainPageProps> = ({ onOpenWorkspace, o
           await updatePublicBrainProfile(description);
         }, 'Public brain description updated.')}
       />
+      {hostedChatBrain ? (
+        <PublicBrainHostedChatDialog
+          brain={hostedChatBrain}
+          onClose={() => setHostedChatBrain(null)}
+        />
+      ) : null}
     </div>
   );
 };

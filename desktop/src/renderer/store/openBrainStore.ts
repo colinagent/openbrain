@@ -15,8 +15,8 @@ import {
   revokeOpenBrainSourcePublic,
   setOpenBrainSourcePublic,
   shareOpenBrainSourceWithUser,
-  subscribeOpenBrainPublicBrain,
-  unsubscribeOpenBrainPublicBrain,
+  followOpenBrainPublicBrain,
+  unfollowOpenBrainPublicBrain,
   updateOpenBrainPublicBrainProfile,
   verifyOpenBrainSource,
   type OpenBrainListSourcesResponse,
@@ -87,13 +87,6 @@ export type PendingOpenBrainSource = {
   error?: string;
 };
 
-export type PublicBrainSource = {
-  sourceID: string;
-  name?: string;
-  workspaceID?: string;
-  orgID?: string;
-};
-
 export function canManageOpenBrainSource(source: Pick<LocalOpenBrainWorkspace, 'bindingMode' | 'canMutateSource' | 'effectivePermission' | 'publicOwnerUID'> | null | undefined): boolean {
   if (!source) {
     return false;
@@ -110,7 +103,8 @@ export function canManageOpenBrainSource(source: Pick<LocalOpenBrainWorkspace, '
   return true;
 }
 
-export type SubscribedPublicBrain = {
+export type FollowedPublicBrain = {
+  brainID: string;
   ownerUID: string;
   name: string;
   username: string;
@@ -120,21 +114,28 @@ export type SubscribedPublicBrain = {
   activeSourceCount: number;
   description?: string;
   owned: boolean;
-  sources: PublicBrainSource[];
+  member: boolean;
+  offer?: { offerID: string; unitAmountU: string; currency: 'usd'; interval: 'month'; checkoutAvailable: boolean; includesAIUsage: false };
+  membership?: { membershipID: string; status: string; currentPeriodEnd?: string; cancelAtPeriodEnd: boolean; includesAIUsage: false };
+  accessMode?: 'public' | 'members_only';
   linked: boolean;
 };
 
 export type PublicBrainDirectoryEntry = {
+  brainID: string;
   ownerUID: string;
   name: string;
   username: string;
   ownerInitial?: string;
   avatar?: string;
   activeSourceCount: number;
-  subscribed: boolean;
+  followed: boolean;
   owned: boolean;
   description?: string;
-  sources: PublicBrainSource[];
+  member: boolean;
+  offer?: { offerID: string; unitAmountU: string; currency: 'usd'; interval: 'month'; checkoutAvailable: boolean; includesAIUsage: false };
+  membership?: { membershipID: string; status: string; currentPeriodEnd?: string; cancelAtPeriodEnd: boolean; includesAIUsage: false };
+  accessMode?: 'public' | 'members_only';
 };
 
 export type OpenBrainSourceActionOptions = {
@@ -173,7 +174,7 @@ type OpenBrainStoreState = {
   githubCheckError: string | null;
   sources: LocalOpenBrainWorkspace[];
   pendingSources: PendingOpenBrainSource[];
-  publicBrains: SubscribedPublicBrain[];
+  publicBrains: FollowedPublicBrain[];
   publicBrainProfile: OpenBrainPublicBrainProfile | null;
   sourceLinkSettings: SourceLinkSettings;
   peerLinks: OpenBrainPeerLinkState;
@@ -205,8 +206,8 @@ type OpenBrainStoreState = {
   revokeSourcePublic: (workspace: LocalOpenBrainWorkspace) => Promise<void>;
   getPublicBrainProfile: () => Promise<OpenBrainPublicBrainProfile>;
   updatePublicBrainProfile: (description: string) => Promise<OpenBrainPublicBrainProfile>;
-  subscribePublicBrain: (ownerUID: string) => Promise<void>;
-  unsubscribePublicBrain: (ownerUID: string) => Promise<void>;
+  followPublicBrain: (ownerUID: string) => Promise<void>;
+  unfollowPublicBrain: (ownerUID: string) => Promise<void>;
   listPublicBrainDirectory: (query: string) => Promise<PublicBrainDirectoryEntry[]>;
 };
 
@@ -616,46 +617,29 @@ function updateWorkspacePublicAccess(
   });
 }
 
-function normalizePublicBrainSources(value: unknown): PublicBrainSource[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const seen = new Set<string>();
-  return value.reduce<PublicBrainSource[]>((acc, raw) => {
-    const item = raw as Partial<PublicBrainSource>;
-    const sourceID = (item.sourceID || '').trim();
-    if (!sourceID || seen.has(sourceID)) {
-      return acc;
-    }
-    seen.add(sourceID);
-    acc.push({
-      sourceID,
-      name: (item.name || '').trim() || undefined,
-      workspaceID: (item.workspaceID || sourceID).trim() || undefined,
-      orgID: (item.orgID || '').trim() || undefined,
-    });
-    return acc;
-  }, []);
-}
-
 function normalizePublicBrainEntry(entry: Partial<PublicBrainDirectoryEntry>): PublicBrainDirectoryEntry | null {
+  const brainID = (entry.brainID || '').trim();
   const ownerUID = (entry.ownerUID || '').trim();
   const name = (entry.name || '').trim();
   const username = (entry.username || '').trim();
-  if (!ownerUID || !name || !username) {
+  if (!brainID || !ownerUID || !name || !username) {
     return null;
   }
   return {
+    brainID,
     ownerUID,
     name,
     username,
     ownerInitial: (entry.ownerInitial || '').trim() || undefined,
     avatar: (entry.avatar || '').trim() || undefined,
     activeSourceCount: typeof entry.activeSourceCount === 'number' ? entry.activeSourceCount : 0,
-    subscribed: entry.subscribed === true,
+    followed: entry.followed === true,
     owned: entry.owned === true,
     description: (entry.description || '').trim() || undefined,
-    sources: normalizePublicBrainSources(entry.sources),
+    member: entry.member === true,
+    offer: entry.offer,
+    membership: entry.membership,
+    accessMode: entry.accessMode,
   };
 }
 
@@ -663,8 +647,9 @@ function publicBrainHasActiveSources(brain: { activeSourceCount?: number }): boo
   return (brain.activeSourceCount || 0) > 0;
 }
 
-function subscribedBrainFromEntry(entry: PublicBrainDirectoryEntry): SubscribedPublicBrain {
+function followedBrainFromEntry(entry: PublicBrainDirectoryEntry): FollowedPublicBrain {
   return {
+    brainID: entry.brainID,
     ownerUID: entry.ownerUID,
     name: entry.name,
     username: entry.username,
@@ -674,15 +659,18 @@ function subscribedBrainFromEntry(entry: PublicBrainDirectoryEntry): SubscribedP
     activeSourceCount: entry.activeSourceCount,
     description: entry.description,
     owned: entry.owned,
-    sources: entry.sources,
+    member: entry.member,
+    offer: entry.offer,
+    membership: entry.membership,
+    accessMode: entry.accessMode,
     linked: true,
   };
 }
 
-function subscribedBrainsFromDirectory(entries: PublicBrainDirectoryEntry[]): SubscribedPublicBrain[] {
+function followedBrainsFromDirectory(entries: PublicBrainDirectoryEntry[]): FollowedPublicBrain[] {
   return entries
-    .filter((entry) => (entry.subscribed || entry.owned) && publicBrainHasActiveSources(entry))
-    .map(subscribedBrainFromEntry);
+    .filter((entry) => (entry.followed || entry.owned || entry.member) && publicBrainHasActiveSources(entry))
+    .map(followedBrainFromEntry);
 }
 
 function providerStatusState(providerStatus: OpenBrainProviderStatus, fallbackProvider: OpenBrainProviderMode = 'cloud') {
@@ -703,30 +691,30 @@ function normalizeProviderMode(value: unknown, fallback: OpenBrainProviderMode =
   return fallback;
 }
 
-async function loadSubscribedPublicBrains(
+async function loadFollowedPublicBrains(
   provider: OpenBrainProviderMode,
   workspaceTabId: string | undefined,
-): Promise<SubscribedPublicBrain[]> {
+): Promise<FollowedPublicBrain[]> {
   if (provider === 'local') {
     return [];
   }
   const entries = (await listOpenBrainPublicBrains('', workspaceTabId, { includeSelf: true }))
     .map(normalizePublicBrainEntry)
     .filter((entry): entry is PublicBrainDirectoryEntry => Boolean(entry));
-  return subscribedBrainsFromDirectory(entries);
+  return followedBrainsFromDirectory(entries);
 }
 
-async function loadSubscribedPublicBrainsForStore(
+async function loadFollowedPublicBrainsForStore(
   provider: OpenBrainProviderMode,
   workspaceTabId: string | undefined,
-  current: SubscribedPublicBrain[],
-): Promise<{ publicBrains: SubscribedPublicBrain[]; loaded: boolean }> {
+  current: FollowedPublicBrain[],
+): Promise<{ publicBrains: FollowedPublicBrain[]; loaded: boolean }> {
   if (provider === 'local') {
     return { publicBrains: [], loaded: true };
   }
   try {
     return {
-      publicBrains: await loadSubscribedPublicBrains(provider, workspaceTabId),
+      publicBrains: await loadFollowedPublicBrains(provider, workspaceTabId),
       loaded: true,
     };
   } catch {
@@ -803,7 +791,7 @@ export type RefreshInBackgroundOptions = {
 
 const OPENBRAIN_REFRESH_TTL_MS = 60_000;
 
-const PUBLIC_BRAINS_CACHE_PREFIX = 'openbrain.graph.publicBrains.v1';
+const PUBLIC_BRAINS_CACHE_PREFIX = 'openbrain.graph.followedPublicBrains.v2';
 const PUBLIC_BRAIN_PROFILE_CACHE_PREFIX = 'openbrain.graph.publicBrainProfile.v1';
 
 function currentOpenBrainUid(): string | undefined {
@@ -823,7 +811,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function readCachedPublicBrains(uid: string): SubscribedPublicBrain[] | null {
+function readCachedPublicBrains(uid: string): FollowedPublicBrain[] | null {
   try {
     const raw = window.localStorage.getItem(publicBrainsCacheKey(uid));
     if (!raw) {
@@ -833,8 +821,9 @@ function readCachedPublicBrains(uid: string): SubscribedPublicBrain[] | null {
     if (!Array.isArray(parsed)) {
       return null;
     }
-    return parsed.filter((entry): entry is SubscribedPublicBrain => (
+    return parsed.filter((entry): entry is FollowedPublicBrain => (
       isPlainObject(entry)
+      && typeof entry.brainID === 'string'
       && typeof entry.ownerUID === 'string'
       && typeof entry.name === 'string'
       && typeof entry.username === 'string'
@@ -844,7 +833,7 @@ function readCachedPublicBrains(uid: string): SubscribedPublicBrain[] | null {
   }
 }
 
-function writeCachedPublicBrains(uid: string, brains: SubscribedPublicBrain[]): void {
+function writeCachedPublicBrains(uid: string, brains: FollowedPublicBrain[]): void {
   try {
     window.localStorage.setItem(publicBrainsCacheKey(uid), JSON.stringify(brains));
   } catch {
@@ -883,7 +872,7 @@ function writeCachedPublicBrainProfile(uid: string, profile: OpenBrainPublicBrai
   }
 }
 
-function persistLoadedPublicBrains(provider: OpenBrainProviderMode, brains: SubscribedPublicBrain[]): void {
+function persistLoadedPublicBrains(provider: OpenBrainProviderMode, brains: FollowedPublicBrain[]): void {
   if (provider === 'local') {
     return;
   }
@@ -1008,7 +997,7 @@ export const useOpenBrainStore = create<OpenBrainStoreState>((set, get) => ({
           get().sourceLinkSettings,
         );
       }
-      const publicBrainLoad = await loadSubscribedPublicBrainsForStore(
+      const publicBrainLoad = await loadFollowedPublicBrainsForStore(
         provider,
         workspaceTabId,
         get().publicBrains,
@@ -1113,7 +1102,7 @@ export const useOpenBrainStore = create<OpenBrainStoreState>((set, get) => ({
           get().sourceLinkSettings,
         );
       }
-      const publicBrainLoad = await loadSubscribedPublicBrainsForStore(
+      const publicBrainLoad = await loadFollowedPublicBrainsForStore(
         provider,
         workspaceTabId,
         get().publicBrains,
@@ -1453,7 +1442,7 @@ export const useOpenBrainStore = create<OpenBrainStoreState>((set, get) => ({
     return profile;
   },
 
-  subscribePublicBrain: async (ownerUID) => {
+  followPublicBrain: async (ownerUID) => {
     if (get().provider === 'local') {
       throw new Error('Public brains are available only with OpenBrain Cloud.');
     }
@@ -1461,12 +1450,12 @@ export const useOpenBrainStore = create<OpenBrainStoreState>((set, get) => ({
     if (!trimmed) {
       throw new Error('Public brain owner is required.');
     }
-    const rawEntry = await subscribeOpenBrainPublicBrain(trimmed);
-    const entry = normalizePublicBrainEntry({ ...rawEntry, subscribed: true });
+    const rawEntry = await followOpenBrainPublicBrain(trimmed);
+    const entry = normalizePublicBrainEntry({ ...rawEntry, followed: true });
     if (!entry) {
       throw new Error('Failed to add public brain.');
     }
-    const nextBrain = subscribedBrainFromEntry(entry);
+    const nextBrain = followedBrainFromEntry(entry);
     set((state) => ({
       publicBrains: publicBrainHasActiveSources(nextBrain)
         ? [
@@ -1481,7 +1470,7 @@ export const useOpenBrainStore = create<OpenBrainStoreState>((set, get) => ({
     }));
   },
 
-  unsubscribePublicBrain: async (ownerUID) => {
+  unfollowPublicBrain: async (ownerUID) => {
     if (get().provider === 'local') {
       return;
     }
@@ -1489,7 +1478,7 @@ export const useOpenBrainStore = create<OpenBrainStoreState>((set, get) => ({
     if (!trimmed) {
       return;
     }
-    await unsubscribeOpenBrainPublicBrain(trimmed);
+    await unfollowOpenBrainPublicBrain(trimmed);
     set((state) => ({
       publicBrains: state.publicBrains.filter((brain) => brain.ownerUID !== trimmed),
       peerLinks: {
@@ -1508,10 +1497,10 @@ export const useOpenBrainStore = create<OpenBrainStoreState>((set, get) => ({
       .map(normalizePublicBrainEntry)
       .filter((entry): entry is PublicBrainDirectoryEntry => Boolean(entry));
     set((state) => ({
-      publicBrains: subscribedBrainsFromDirectory(entries),
+      publicBrains: followedBrainsFromDirectory(entries),
       peerLinks: {
         ...state.peerLinks,
-        ...Object.fromEntries(entries.filter((entry) => entry.subscribed || entry.owned).map((entry) => [`public:${entry.ownerUID}`, true])),
+        ...Object.fromEntries(entries.filter((entry) => entry.followed || entry.owned).map((entry) => [`public:${entry.ownerUID}`, true])),
       },
     }));
     return entries;

@@ -41,10 +41,14 @@ func WaitReady(ctx context.Context) error {
 
 // GetConfig fetches the full host config from the OpAgent host via config/get.
 func (h *Host) GetConfig() (*op.Config, error) {
+	return h.GetConfigContext(context.Background())
+}
+
+func (h *Host) GetConfigContext(ctx context.Context) (*op.Config, error) {
 	if h == nil || h.Session == nil {
 		return nil, fmt.Errorf("host session is nil")
 	}
-	res, err := h.Session.OpNode(context.Background(), &op.OpNodeParams{
+	res, err := h.Session.OpNode(ctx, &op.OpNodeParams{
 		OpCode: op.ConfigGet,
 	})
 	if err != nil {

@@ -216,16 +216,59 @@ func (h *Handler) CloudListPublicBrains(c *gin.Context) {
 	h.proxyCloudAPI(c, http.MethodGet, endpoint)
 }
 
-func (h *Handler) CloudResolvePublicBrainSources(c *gin.Context) {
-	h.proxyCloudAPI(c, http.MethodGet, "/v1/me/brain/public-brains/"+url.PathEscape(c.Param("ownerUID"))+"/sources")
+func (h *Handler) CloudFollowPublicBrain(c *gin.Context) {
+	h.proxyCloudAPI(c, http.MethodPut, "/v1/me/brain/public-brains/"+url.PathEscape(c.Param("ownerUID"))+"/follow")
 }
 
-func (h *Handler) CloudSubscribePublicBrain(c *gin.Context) {
-	h.proxyCloudAPI(c, http.MethodPut, "/v1/me/brain/public-brains/"+url.PathEscape(c.Param("ownerUID"))+"/subscription")
+func (h *Handler) CloudUnfollowPublicBrain(c *gin.Context) {
+	h.proxyCloudAPI(c, http.MethodDelete, "/v1/me/brain/public-brains/"+url.PathEscape(c.Param("ownerUID"))+"/follow")
 }
 
-func (h *Handler) CloudUnsubscribePublicBrain(c *gin.Context) {
-	h.proxyCloudAPI(c, http.MethodDelete, "/v1/me/brain/public-brains/"+url.PathEscape(c.Param("ownerUID"))+"/subscription")
+func (h *Handler) CloudCreatePublicBrainConversation(c *gin.Context) {
+	h.proxyCloudAPI(c, http.MethodPost, "/v1/public-brains/"+url.PathEscape(c.Param("brainID"))+"/conversations")
+}
+
+func (h *Handler) CloudQuotePublicBrainTurn(c *gin.Context) {
+	h.proxyCloudAPI(c, http.MethodPost, "/v1/public-brains/"+url.PathEscape(c.Param("brainID"))+"/conversations/"+url.PathEscape(c.Param("conversationID"))+"/turn-quotes")
+}
+
+func (h *Handler) CloudRunPublicBrainTurn(c *gin.Context) {
+	raw, err := io.ReadAll(io.LimitReader(c.Request.Body, 64<<10))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "error": err.Error()})
+		return
+	}
+	endpoint := "/v1/public-brains/" + url.PathEscape(c.Param("brainID")) + "/conversations/" + url.PathEscape(c.Param("conversationID")) + "/turns"
+	response, err := h.service.OpenCloudAPIStream(c.Request.Context(), http.MethodPost, endpoint, raw)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "cloud_unavailable", "error": err.Error()})
+		return
+	}
+	defer response.Body.Close()
+	contentType := response.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/json; charset=utf-8"
+	}
+	c.Header("Content-Type", contentType)
+	c.Header("Cache-Control", "no-store")
+	c.Header("X-Accel-Buffering", "no")
+	c.Status(response.StatusCode)
+	flusher, _ := c.Writer.(http.Flusher)
+	buffer := make([]byte, 16<<10)
+	for {
+		count, readErr := response.Body.Read(buffer)
+		if count > 0 {
+			if _, writeErr := c.Writer.Write(buffer[:count]); writeErr != nil {
+				return
+			}
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+		if readErr != nil {
+			return
+		}
+	}
 }
 
 func (h *Handler) proxyCloudAPI(c *gin.Context, method string, endpoint string) {

@@ -37,6 +37,7 @@ export type OpenBrainFlowWorkspace = {
 };
 
 export type OpenBrainFlowPublicBrain = {
+  brainID: string;
   ownerUID: string;
   name: string;
   username: string;
@@ -44,14 +45,7 @@ export type OpenBrainFlowPublicBrain = {
   avatar?: string;
   activeSourceCount?: number;
   colorKey: string;
-  sources: OpenBrainFlowPublicBrainSource[];
-};
-
-export type OpenBrainFlowPublicBrainSource = {
-  sourceID: string;
-  name?: string;
-  workspaceID?: string;
-  orgID?: string;
+  accessMode?: string;
 };
 
 export type OpenBrainDemoOrbitNodeKind = 'source' | 'peer';
@@ -101,7 +95,7 @@ export type OpenBrainFlowNodeData = {
   effectivePermission?: 'read' | 'write' | 'admin';
   canMutateSource?: boolean;
   publicOwnerUID?: string;
-  publicBrainSources?: OpenBrainFlowPublicBrainSource[];
+  brainID?: string;
   bindingMode?: 'own' | 'granted';
   ownerUID?: string;
   username?: string;
@@ -537,9 +531,9 @@ function buildPersonalGraph(
     initial: string,
     colorKey: string,
     defaultLinked: boolean,
+    brainID?: string,
     ownerUID?: string,
     avatar?: string,
-    publicBrainSources?: OpenBrainFlowPublicBrainSource[],
     username?: string,
   ) => {
     const color = colorForDemoKey(colorKey);
@@ -549,10 +543,10 @@ function buildPersonalGraph(
       subtitle,
       initial,
       colorKey,
+      brainID,
       ownerUID,
       username,
       avatar,
-      publicBrainSources,
       defaultLinked,
       accentColor: color.color,
       accentColor2: color.color2,
@@ -617,13 +611,13 @@ function buildPersonalGraph(
       addPeer(
         `public:${brain.ownerUID}`,
         brain.name,
-        `@${brain.username} · ${brain.activeSourceCount ?? 0} public sources`,
+        `@${brain.username} · ${brain.activeSourceCount ?? 0} public sources${brain.accessMode ? ` · ${brain.accessMode}` : ''}`,
         brain.ownerInitial || workspaceInitial(brain.name),
         brain.colorKey,
         true,
+        brain.brainID,
         brain.ownerUID,
         brain.avatar,
-        brain.sources,
         brain.username,
       );
     });

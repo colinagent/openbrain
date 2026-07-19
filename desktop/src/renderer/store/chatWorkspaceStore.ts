@@ -164,13 +164,6 @@ export type OpenThreadConversationOptions = {
   agentID?: string | null;
 };
 
-export type GBrainQueryScopePublicSource = {
-  sourceID: string;
-  name?: string;
-  workspaceID?: string;
-  orgID?: string;
-};
-
 export type GBrainQueryScope =
   | {
     kind: 'source';
@@ -178,13 +171,6 @@ export type GBrainQueryScope =
     sourceID: string;
     workspaceID?: string;
     orgID?: string;
-  }
-  | {
-    kind: 'publicBrain';
-    label: string;
-    ownerUID: string;
-    username?: string;
-    sources: GBrainQueryScopePublicSource[];
   }
   | null;
 

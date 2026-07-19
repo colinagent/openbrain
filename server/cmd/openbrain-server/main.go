@@ -134,6 +134,7 @@ func main() {
 	router.POST("/v1/tree-import/sessions/:sessionId/commit", treeImportHandler.CommitSession)
 	router.DELETE("/v1/tree-import/sessions/:sessionId", treeImportHandler.CancelSession)
 	router.GET("/v1/openbrain/status", gbrainHandler.Status)
+	router.GET("/v1/openbrain/runtime/models", gbrainHandler.RuntimeModels)
 	router.GET("/v1/openbrain/sources", gbrainHandler.ListSources)
 	router.GET("/v1/openbrain/cached-sources", gbrainHandler.CachedListSources)
 	router.POST("/v1/openbrain/query", gbrainHandler.Query)
@@ -153,9 +154,12 @@ func main() {
 	router.GET("/v1/openbrain/cloud/public-profile", gbrainHandler.CloudGetPublicBrainProfile)
 	router.PUT("/v1/openbrain/cloud/public-profile", gbrainHandler.CloudUpdatePublicBrainProfile)
 	router.GET("/v1/openbrain/cloud/public-brains", gbrainHandler.CloudListPublicBrains)
-	router.GET("/v1/openbrain/cloud/public-brains/:ownerUID/sources", gbrainHandler.CloudResolvePublicBrainSources)
-	router.PUT("/v1/openbrain/cloud/public-brains/:ownerUID/subscription", gbrainHandler.CloudSubscribePublicBrain)
-	router.DELETE("/v1/openbrain/cloud/public-brains/:ownerUID/subscription", gbrainHandler.CloudUnsubscribePublicBrain)
+	router.PUT("/v1/openbrain/cloud/public-brains/:ownerUID/follow", gbrainHandler.CloudFollowPublicBrain)
+	router.DELETE("/v1/openbrain/cloud/public-brains/:ownerUID/follow", gbrainHandler.CloudUnfollowPublicBrain)
+	router.POST("/v1/openbrain/cloud/public-brains/:brainID/conversations", gbrainHandler.CloudCreatePublicBrainConversation)
+	router.POST("/v1/openbrain/cloud/public-brains/:brainID/conversations/:conversationID/turn-quotes", gbrainHandler.CloudQuotePublicBrainTurn)
+	router.POST("/v1/openbrain/cloud/public-brains/:brainID/conversations/:conversationID/turns", gbrainHandler.CloudRunPublicBrainTurn)
+	router.POST("/v1/openbrain/cloud/public-brains/:brainID/conversations/:conversationID/byok-turns", gbrainHandler.CloudRunPublicBrainBYOKTurn)
 
 	httpServer := &http.Server{
 		Addr:    addr,

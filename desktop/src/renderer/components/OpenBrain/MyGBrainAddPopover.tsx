@@ -43,8 +43,8 @@ type MyGBrainAddPopoverProps = {
   busy: boolean;
   onClose: () => void;
   onCreateSource: () => Promise<void>;
-  onSubscribePublicBrain: (ownerUID: string) => Promise<void>;
-  onUnsubscribePublicBrain: (ownerUID: string) => Promise<void>;
+  onFollowPublicBrain: (ownerUID: string) => Promise<void>;
+  onUnfollowPublicBrain: (ownerUID: string) => Promise<void>;
   listPublicBrainDirectory: (query: string) => Promise<PublicBrainDirectoryEntry[]>;
   onLogin: () => Promise<void>;
 };
@@ -82,8 +82,8 @@ export const MyGBrainAddPopover: React.FC<MyGBrainAddPopoverProps> = ({
   busy,
   onClose,
   onCreateSource,
-  onSubscribePublicBrain,
-  onUnsubscribePublicBrain,
+  onFollowPublicBrain,
+  onUnfollowPublicBrain,
   listPublicBrainDirectory,
   onLogin,
 }) => {
@@ -274,12 +274,12 @@ export const MyGBrainAddPopover: React.FC<MyGBrainAddPopoverProps> = ({
                         onClick={() => void runAction(() => (
                           entry.owned
                             ? Promise.resolve()
-                            : entry.subscribed
-                            ? onUnsubscribePublicBrain(entry.ownerUID)
-                            : onSubscribePublicBrain(entry.ownerUID)
+                            : entry.followed
+                            ? onUnfollowPublicBrain(entry.ownerUID)
+                            : onFollowPublicBrain(entry.ownerUID)
                         ))}
                       >
-                        {entry.owned ? 'You' : entry.subscribed ? 'Remove' : '+'}
+                        {entry.owned ? 'You' : entry.followed ? 'Unfollow' : 'Follow'}
                       </button>
                     </div>
                   ))}

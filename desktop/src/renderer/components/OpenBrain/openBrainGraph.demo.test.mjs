@@ -68,10 +68,10 @@ test('real OpenBrain graph does not request the demo team cluster', () => {
   assert.match(pageSource, /buildOpenBrainFlow\(sources\.map\(toGraphWorkspace\), peerLinks, \{ publicBrains: graphPublicBrains \}\)/);
   assert.match(pageSource, /\.filter\(\(brain\) => brain\.activeSourceCount > 0\)/);
   assert.match(pageSource, /avatar: brain\.avatar/);
-  assert.match(pageSource, /sources: brain\.sources/);
+  assert.match(pageSource, /brainID: brain\.brainID/);
   assert.match(flowSource, /avatar\?: string;/);
-  assert.match(flowSource, /sources: OpenBrainFlowPublicBrainSource\[\];/);
-  assert.match(flowSource, /publicBrainSources\?: OpenBrainFlowPublicBrainSource\[\];/);
+  assert.match(flowSource, /brainID: string;/);
+  assert.doesNotMatch(flowSource, /OpenBrainFlowPublicBrainSource/);
 });
 
 test('OpenBrain graph click semantics use real cloud disconnect actions', () => {
@@ -89,16 +89,15 @@ test('OpenBrain graph click semantics use real cloud disconnect actions', () => 
   assert.match(pageSource, /setSourceLinked\(sourceKey, !isSourceLinked\(sourceKey\)\)/);
   assert.match(pageSource, /disconnectPublicBrain\(node\)/);
   assert.match(pageSource, /startPublicBrainChat\(node\)/);
-  assert.match(pageSource, /await startOpenBrainChat\(null, \{ scope \}\);/);
+  assert.match(pageSource, /setHostedChatBrain/);
   assert.match(pageSource, /gbrainSourceScopeForWorkspace\(workspace\)/);
   assert.doesNotMatch(pageSource, /publicBrainScopeForNode/);
-  assert.match(pageSource, /resolvePublicBrainScopeForNode/);
-  assert.match(pageSource, /resolveOpenBrainPublicBrainSources\(ownerUID\)/);
-  assert.match(pageSource, /publicBrainScopeForBrain\(\{[\s\S]*ownerUID,[\s\S]*sources,[\s\S]*\}, node\.label\)/);
-  assert.match(pageSource, /openingPublicBrainOwnerUIDRef/);
+  assert.doesNotMatch(pageSource, /resolvePublicBrainScopeForNode/);
+  assert.doesNotMatch(pageSource, /resolveOpenBrainPublicBrainSources/);
+  assert.doesNotMatch(pageSource, /openingPublicBrainOwnerUIDRef/);
   assert.doesNotMatch(pageSource, /Public brain source IDs are not loaded yet/);
   assert.doesNotMatch(pageSource, /toggleCloudSourceQueries/);
-  assert.match(pageSource, /unsubscribePublicBrain\(ownerUID\)/);
+  assert.match(pageSource, /unfollowPublicBrain\(ownerUID\)/);
   assert.doesNotMatch(pageSource, /scheduleNodeSingleClick/);
   assert.doesNotMatch(pageSource, /isDoubleClick/);
   assert.match(rendererSource, /data\.onNodeAction\?\.\(node, event\);/);
