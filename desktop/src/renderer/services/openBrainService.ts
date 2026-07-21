@@ -491,14 +491,11 @@ export type OpenBrainPublicBrainConversation = {
 };
 
 export type OpenBrainPublicBrainFunding = {
-	kind: 'free_daily' | 'ai_balance' | 'owner_preview';
+	kind: 'ai_balance' | 'owner_preview';
 	authorizedMaxDebitU?: string;
 	actualDebitU?: string;
 	retailCostU?: string;
 	balanceU?: string;
-	remaining?: number;
-	limit?: number;
-	resetsAt?: string;
 };
 
 export type OpenBrainPublicBrainQuote = {
