@@ -118,7 +118,7 @@ Built-in example:
 ```yaml
 run:
   daemon: true
-  url: "https://api.op-agent.com/gbrain/mcp"
+  url: "https://api.op-agent.com/brain/mcp"
   header:
     Authorization: "Bearer {openbrain_session}"
 ```

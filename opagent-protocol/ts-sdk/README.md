@@ -17,7 +17,7 @@ Remote MCP HTTP endpoints do not use this stdio transport. Declare them with
 
 ```yaml
 run:
-  url: "https://api.op-agent.com/gbrain/mcp"
+  url: "https://api.op-agent.com/brain/mcp"
   daemon: true
   header:
     Authorization: "Bearer {openbrain_session}"

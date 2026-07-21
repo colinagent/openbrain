@@ -203,7 +203,7 @@ run:
 
 ```yaml
 run:
-  url: "https://api.op-agent.com/gbrain/mcp"
+  url: "https://api.op-agent.com/brain/mcp"
   daemon: true
   header:
     Authorization: "Bearer {openbrain_session}"

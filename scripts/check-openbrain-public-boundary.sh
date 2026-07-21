@@ -29,6 +29,7 @@ global_patterns=(
   'AWS_SECRET_ACCESS_KEY'
   'api[.]opagent[.]chat'
   'api[.]openbrain[.]chat'
+  '/gbrain/mcp'
   'openbrain-dev'
   '/Users/colin'
 )

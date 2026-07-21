@@ -290,7 +290,7 @@ func TestScanAgents_ResolvesGBrainCloudToolServerRef(t *testing.T) {
 name: gbrain-cloud
 run:
   daemon: true
-  url: "https://api.op-agent.com/gbrain/mcp"
+  url: "https://api.op-agent.com/brain/mcp"
   header:
     Authorization: "Bearer {openbrain_session}"
 ---
@@ -337,7 +337,7 @@ func TestScanAgents_ToolsFieldEnablesEmptySystoolAllowlist(t *testing.T) {
 name: gbrain-cloud
 run:
   daemon: true
-  url: "https://api.op-agent.com/gbrain/mcp"
+  url: "https://api.op-agent.com/brain/mcp"
 ---
 `)
 	writeScannerTestFile(t, filepath.Join(baseDir, "agents", "gbrain", ".agent", "AGENT.md"), `---
@@ -506,7 +506,7 @@ func TestScanToolsParsesRunHeader(t *testing.T) {
 name: gbrain-cloud
 run:
   daemon: true
-  url: "https://api.op-agent.com/gbrain/mcp"
+  url: "https://api.op-agent.com/brain/mcp"
   header:
     Authorization: "Bearer {openbrain_session}"
 ---
@@ -531,7 +531,7 @@ func TestScanTools_RunAuthFieldIsRejected(t *testing.T) {
 name: gbrain-cloud
 run:
   daemon: true
-  url: "https://api.op-agent.com/gbrain/mcp"
+  url: "https://api.op-agent.com/brain/mcp"
   auth:
     type: openbrain_session
 ---
