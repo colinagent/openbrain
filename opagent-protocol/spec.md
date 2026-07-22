@@ -274,6 +274,11 @@ System and config:
 - `config/get`
 - `config/system/get`
 
+`config/system/get` returns `SystemConfigResult`: the effective `SystemConfig`
+plus required read-only `defaultWorkspace`, computed by the Runtime from
+`baseDir`. Clients consume this value directly rather than deriving a workspace
+path.
+
 Chat and thread:
 
 - `thread/create`
