@@ -14,10 +14,43 @@ export interface OpNode {
 }
 
 export interface SystemConfigResult {
-  baseDir?: string;
+  baseDir: string;
+  defaultWorkspace: string;
   hostID?: string;
   instanceID?: string;
   [key: string]: unknown;
+}
+
+export type SystemConfigRetryOptions = {
+  attempts?: number;
+  intervalMs?: number;
+};
+
+function waitForRetry(intervalMs: number): Promise<void> {
+  if (intervalMs <= 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    setTimeout(resolve, intervalMs);
+  });
+}
+
+export function isCompleteSystemConfig(value: SystemConfigResult | null | undefined): value is SystemConfigResult {
+  if (!value) {
+    return false;
+  }
+  const instanceID = typeof value.hostID === 'string' && value.hostID.trim()
+    ? value.hostID.trim()
+    : typeof value.instanceID === 'string'
+      ? value.instanceID.trim()
+      : '';
+  return Boolean(
+    typeof value.baseDir === 'string'
+    && value.baseDir.trim()
+    && typeof value.defaultWorkspace === 'string'
+    && value.defaultWorkspace.trim()
+    && instanceID,
+  );
 }
 
 const warnedMethods = {
@@ -63,16 +96,29 @@ class AgentService {
     }
   }
 
-  async getSystemConfig(): Promise<SystemConfigResult | null> {
-    try {
-      return await this.connection.request<SystemConfigResult>(
-        'config/system/get',
-        {},
-      );
-    } catch (err) {
-      warnOnce('systemConfigGet', `[agentService] config/system/get failed: ${(err as Error)?.message || 'unknown error'}`);
-      return null;
+  async getSystemConfig(options: SystemConfigRetryOptions = {}): Promise<SystemConfigResult | null> {
+    const attempts = Math.max(1, options.attempts ?? 1);
+    const intervalMs = Math.max(0, options.intervalMs ?? 250);
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        const result = await this.connection.request<SystemConfigResult>(
+          'config/system/get',
+          {},
+        );
+        if (isCompleteSystemConfig(result)) {
+          return result;
+        }
+        lastError = new Error('Runtime returned an incomplete system config');
+      } catch (err) {
+        lastError = err;
+      }
+      if (attempt + 1 < attempts) {
+        await waitForRetry(intervalMs);
+      }
     }
+    warnOnce('systemConfigGet', `[agentService] config/system/get failed: ${(lastError as Error)?.message || 'unknown error'}`);
+    return null;
   }
 
   clearCache(): void {

@@ -242,9 +242,8 @@ Patterns worth copying:
   file, not in YAML list form inside front matter.
 - Keep each skill focused. One workflow per directory.
 
-GBrain-specific skill conventions live in the external `colinagent/gbrain`
-fork, which tracks upstream `garrytan/gbrain`. OpenBrain runtime behavior
-itself stays the same.
+GBrain-specific skill conventions live in upstream `garrytan/gbrain`.
+OpenBrain carries no GBrain source delta; its runtime behavior stays separate.
 
 ## Authoring Checklist
 

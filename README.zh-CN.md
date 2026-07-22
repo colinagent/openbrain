@@ -57,13 +57,13 @@ OpenBrain 给 GBrain 增加 GUI 和 agent runtime。
 
 ## 发布
 
-OpenBrain release 构建可从 GitHub Releases 获取。Runtime 自更新 manifest、runtime bundle、bootstrap 二进制和桌面更新元数据默认使用 GitHub Release。
+OpenBrain 桌面安装包可从 GitHub Releases 获取。Runtime 自更新 manifest、runtime bundle、bootstrap 二进制和桌面更新元数据由公开下载入口 `https://download.op-agent.com` 提供。
 
 ## 许可证
 
 本仓库使用多种许可证：
 
 - **AGPL-3.0** — OpenBrain 组件：`desktop/`、`server/`、`agents/`、`tools/`、`opagent-runtime/`、`opagent-protocol/`、`docs/` 和 `scripts/openbrain/`。见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
-- **MIT** — GBrain 本身是外部项目。OpenBrain release 辅助脚本可打包由 `colinagent/gbrain` fork 构建的二进制，该 fork 跟踪 `garrytan/gbrain`。
+- **MIT** — GBrain 本身是外部 `garrytan/gbrain` 项目。OpenBrain release 辅助脚本直接构建上游源码，或使用与上游完全一致的 `colinagent/gbrain` 二进制镜像。
 
 如果你修改或分发 OpenBrain 代码，必须遵守 AGPL-3.0（包括在要求时提供源码），并按 NOTICE 保留 OpenBrain 署名。版权归 OpAgent Inc. 所有。

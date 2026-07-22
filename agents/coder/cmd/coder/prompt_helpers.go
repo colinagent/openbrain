@@ -55,6 +55,17 @@ func ExpandPlatformVariables(prompt, platform string) string {
 	return strings.ReplaceAll(prompt, "${platform}", strings.TrimSpace(platform))
 }
 
+func ExpandCwdVariables(prompt, cwd string) (string, error) {
+	if prompt == "" {
+		return "", nil
+	}
+	resolved := strings.TrimSpace(cwd)
+	if strings.Contains(prompt, "${cwd}") && resolved == "" {
+		return "", fmt.Errorf("prompt requires meta.cwd")
+	}
+	return strings.ReplaceAll(prompt, "${cwd}", resolved), nil
+}
+
 func ResolveOpAgentShellContext(platform string) OpAgentShellContext {
 	platform = strings.TrimSpace(platform)
 	if platform == "" {

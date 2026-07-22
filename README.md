@@ -63,9 +63,10 @@ see [docs/desktop.md](docs/desktop.md).
 
 ## Releases
 
-OpenBrain release builds are available from GitHub Releases. Runtime
+OpenBrain desktop installers are available from GitHub Releases. Runtime
 self-update manifests, runtime bundles, bootstrap binaries, and desktop update
-metadata use the GitHub Release by default.
+metadata are served from the public download endpoint:
+`https://download.op-agent.com`.
 
 ## License
 
@@ -74,9 +75,9 @@ This repository uses multiple licenses:
 - **AGPL-3.0** — OpenBrain components: `desktop/`, `server/`, `agents/`,
   `tools/`, `opagent-runtime/`, `opagent-protocol/`, `docs/`, and
   `scripts/openbrain/`. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
-- **MIT** — GBrain itself is an external project. OpenBrain release helpers can
-  package binaries built from the `colinagent/gbrain` fork, which tracks
-  `garrytan/gbrain`.
+- **MIT** — GBrain itself is the external `garrytan/gbrain` project. OpenBrain
+  release helpers package upstream source directly or use an upstream-aligned
+  `colinagent/gbrain` binary mirror.
 
 If you modify or distribute OpenBrain code, you must comply with AGPL-3.0
 (including source availability when required) and retain attribution to

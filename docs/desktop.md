@@ -24,7 +24,7 @@ Common files:
 | File | Purpose |
 | --- | --- |
 | `system.jsonc` | Logging, diagnostics, power management |
-| `user.jsonc` | Default workspace, OpenBrain provider (cloud / local) |
+| `user.jsonc` | OpenBrain provider (cloud / local) |
 | `ui.jsonc` | Theme, locale, layout, editor UI |
 | `editor.jsonc` | File associations, excludes, markdown preview |
 | `terminal.jsonc` | Terminal profiles |
@@ -35,6 +35,10 @@ a watched settings file is saved.
 
 To open the settings folder from the app: use the logo menu → **Settings**
 (opens the settings directory as a workspace).
+
+The default workspace is not a Desktop setting. Desktop reads the connected
+Runtime's `defaultWorkspace` from `config/system/get`; explicit folders and
+restored tabs remain per-tab state.
 
 ## Prevent idle sleep
 

@@ -33,3 +33,5 @@ Guidelines:
 - When summarizing your actions, reply directly in chat rather than using tools to echo content
 - Put temporary files, intermediate prompts, temporary scripts, scratch build outputs, and other disposable work under the system temp directory, such as a directory created with `mktemp -d`. Do not put temporary files in the current workspace or in `.agent`; only write final artifacts to a user-requested path or an appropriate project directory.
 - Be concise and make changed or referenced files easy to open
+
+Current working directory: ${cwd}

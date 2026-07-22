@@ -219,6 +219,28 @@ Representative groups:
 | Node discovery | `node/list`, `agent/scan` |
 | Host/config | `system/started`, `notify/message`, `config/get`, `config/system/get` |
 
+`runtime/evidence-answer` is a bounded Runtime-owned operation for generating
+an answer with a user-configured provider model from already verified evidence.
+The request names an explicit local `modelKey`, carries only the question,
+short conversation history, and citation excerpts, and returns an answer marked
+with `billingResponsibility: "external_provider"`. Provider credentials remain
+inside the active local or remote Runtime and are never part of the opcode
+payload.
+
+`config/system/get` returns the effective process configuration plus the
+Runtime-owned default workspace:
+
+```json
+{
+  "baseDir": "/home/user/.openbrain",
+  "defaultWorkspace": "/home/user/.openbrain/workspace"
+}
+```
+
+`defaultWorkspace` is a read-only result derived by the Runtime from its
+effective `baseDir`; clients must not persist a competing default or reconstruct
+the path themselves.
+
 Some older opcodes remain in the file as deprecated aliases, for example
 `agent/call` and `agent/continue`. New code should prefer `thread/submit`.
 
@@ -351,6 +373,57 @@ await server.run(new StdioTransport());
 The TypeScript SDK exposes `OpNodeHandler` for opcode-based server methods such
 as `prompt/get`. It is intentionally smaller than the Go SDK.
 
+## Remote-Control Transport Contract
+
+`opagent-protocol/go-sdk/remotecontrol` defines the version 1 wire contract for
+mobile remote-control transports. This package is separate from `op`:
+remote-control envelopes are bounded relay frames, not a way to expose runtime
+opcodes, server HTTP routes, or desktop WebSocket methods.
+
+The host connector runs inside `openbrain-server` and connects outward to the
+selected relay region. The relay never receives an arbitrary local HTTP route
+or runtime opcode: every request still passes through the default-deny host
+dispatcher and an explicit capability check.
+
+Version 1 has these invariants:
+
+- Every request has a `clientID`, `streamID`, positive `seqID`, stable
+  `requestID`, and an operation from the explicit allowlist.
+- The exact major protocol version must match. Unknown JSON fields are ignored,
+  while unknown operations and unsupported versions are rejected.
+- A frame is at most 256 KiB, a reassembled logical message is at most 8 MiB,
+  a message has at most 64 chunks, and a client has at most 32 in-flight
+  requests.
+- Handshake responses advertise those limits, a 25-second heartbeat, a
+  60-second pong timeout, and a 5-minute request replay window.
+- Side-effecting operations reuse the same `requestID` across retries. Reusing
+  an ID for different content is a `request_conflict`; retrying identical
+  content returns the stored result during the host replay window.
+- Relay replay is bounded and non-durable. When a cursor falls outside the
+  retained window, `resync_required` names the authoritative snapshot operation
+  instead of reconstructing history in the relay.
+
+The shared JSON fixtures live in
+`opagent-protocol/go-sdk/remotecontrol/testdata`. Protocol consumers validate
+against these canonical fixtures rather than maintaining independent examples.
+
+The conversation allowlist contains thread list/create/snapshot,
+submit/interrupt/continue/steer/follow-up, queue remove/promote, message reply,
+and message mark-read operations. The host resolves the opaque workspace id to
+its configured default workspace, validates agent/model selections, and calls
+the existing chat/runtime services. A remote client is a projection of the same
+thread; it does not persist a second conversation history.
+
+The separate `file.read` capability contains only `file.list`, `file.stat`,
+`file.search`, `file.preview.open`, and `file.preview.chunk`. Requests carry an
+opaque workspace id and a normalized relative path; they never carry an
+absolute host path. The host canonicalizes the configured workspace root,
+rejects traversal, escaped symlinks, and sensitive paths, caps directory pages
+at 200 results and search at 500 matches, and exposes no file mutation
+operation. Inline UTF-8 previews are capped at 2 MiB. Other previews use a
+client/workspace-bound five-minute handle and are capped at 25 MiB. Preview
+operations accept regular files only; directories and special files are denied.
+
 ## How Runtime Uses The Protocol
 
 End-to-end flow:
@@ -374,6 +447,12 @@ Go SDK:
 
 ```bash
 (cd opagent-protocol/go-sdk && go test ./...)
+```
+
+Remote-control host boundary:
+
+```bash
+(cd server && go test ./internal/server/remotecontrol)
 ```
 
 TypeScript SDK:

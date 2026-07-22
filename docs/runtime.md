@@ -66,6 +66,43 @@ Related public docs:
 - `docs/subagent.md`: subagent mounting and `agent_task` delegation
 - `docs/opagent-protocol.md`: shared protocol types, transports, and opcodes
 
+## Remote Access Host Connector
+
+`openbrain-server` owns the computer-side Remote Access connector. It uses the
+same runtime session already held by the server and never calls its own
+loopback HTTP listener. Enabling Remote Access creates an outbound relay
+connection; it does not add a public listener to the computer.
+
+The Desktop settings surface requires explicit confirmation before first
+enable. It shows the current connection state and selected region, creates
+short-lived pairing QR/short codes, lists paired client metadata, and revokes a
+client. Region changes reconnect the host through the selected region and
+invalidate the previous routing generation.
+
+The baseline dispatcher exposes these read-only capabilities:
+
+- environment status and protocol handshake;
+- the default conversation workspace as an opaque workspace id;
+- agent ids, names, and descriptions;
+- enabled model ids and display metadata.
+
+Responses omit account tokens, model credentials and headers, absolute local
+paths, agent URIs, and working directories. Conversation handlers add an
+explicit allowlist for bounded thread snapshots and existing chat controls.
+The host maps opaque workspace ids to its configured default workspace and
+rejects client-supplied working paths.
+
+Read-only mobile file access is a separate `file.read` capability. Its handlers
+resolve normalized relative paths below the canonical configured workspace,
+apply realpath containment and sensitive-path checks, and return only bounded
+list, stat, literal search, and short-lived preview results. Search uses the
+runtime's ripgrep integration with case-insensitive sensitive-file exclusions.
+Preview reads accept regular files only, so sockets, FIFOs, and device files
+cannot become remote file streams.
+No remote write, rename, move, or delete operation is registered. Referencing a
+file from mobile sends its workspace-relative path as conversation input; the
+relay and mobile app do not become file authorities.
+
 ## Node Scanning
 
 ### Mental Model
@@ -117,11 +154,18 @@ The scanner expects top-level package directories under the runtime base dir:
   skills/
   tools/
   configs/
+  workspace/
 ```
 
 Built-in OpenBrain packages ship under the repository's managed runtime bundle.
 User-installed packages also live under the local OpenBrain data directory with
 the same shape.
+
+The effective base directory comes from the Runtime `--base-dir` startup
+argument (default `~/.openbrain`). The Runtime owns and creates
+`<baseDir>/workspace` as its default conversation workspace. It returns the
+resolved absolute path as `defaultWorkspace` from `config/system/get`; Desktop
+and other clients consume that value instead of maintaining another setting.
 
 ### Agent Package Layout
 
@@ -432,6 +476,11 @@ ${agentRoot}  agent package root, such as ~/.openbrain/agents/simple-memory
 ${agentHome}  agent resource dir, such as ~/.openbrain/agents/simple-memory/.agent
 ```
 
+The endpoint Coder additionally expands `${cwd}` from the resolved Thread
+metadata received by `prompt/get`. The Runtime fills that metadata from the
+Thread's explicit CWD or its own `defaultWorkspace`; it never substitutes the
+agent package directory or a Desktop-selected folder.
+
 Runtime never rewrites prompt files on disk during expansion.
 
 After the base prompt is loaded, runtime may append host-owned guidance for
@@ -461,9 +510,9 @@ tools/rg-search/bin/rg[.exe]
 configs/config.json
 ```
 
-The `bin/gbrain[.exe]` asset is built from or downloaded from the external
-`colinagent/gbrain` fork; the GBrain source tree is not vendored in this
-repository.
+The `bin/gbrain[.exe]` asset is built from upstream `garrytan/gbrain` source or
+downloaded from an upstream-aligned `colinagent/gbrain` binary mirror; the
+GBrain source tree is not vendored in this repository.
 
 `agents/simple-memory` is a normal agent package, not a daemon. It ships only
 its manifest and prompt; its runtime state file is created locally when used.
@@ -513,6 +562,9 @@ Runtime release helpers:
 scripts/openbrain/build-runtime-release.sh
 scripts/openbrain/openbrain-run-dev.sh
 ```
+
+Published runtime self-update manifests use the public download endpoint:
+`https://download.op-agent.com/runtime/latest/manifest.json`.
 
 Public-boundary validation:
 
