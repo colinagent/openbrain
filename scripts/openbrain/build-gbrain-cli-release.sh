@@ -22,9 +22,9 @@ Platforms:
 Environment:
   OPENBRAIN_CLI_RELEASE_DIR  Output directory.
   OPENBRAIN_GBRAIN_SOURCE_ROOT
-                             GBrain fork checkout used when no release tag is set. Default: ../gbrain.
+                             Upstream GBrain checkout used when no release tag is set. Default: ../gbrain.
   OPENBRAIN_GBRAIN_RELEASE_TAG
-                             Optional colinagent/gbrain release tag to download instead of building.
+                             Optional upstream-aligned colinagent/gbrain mirror release tag to download instead of building.
   OPENBRAIN_GBRAIN_RELEASE_BASE_URL
                              Optional GBrain release asset base URL. Defaults to GitHub release URL for the tag.
 EOF
@@ -98,7 +98,7 @@ for platform in "${PLATFORMS[@]}"; do
     require_cmd bun
     [[ -f "${GBRAIN_SOURCE_ROOT}/src/cli.ts" ]] || {
       echo "GBrain source not found: ${GBRAIN_SOURCE_ROOT}/src/cli.ts" >&2
-      echo "Set OPENBRAIN_GBRAIN_SOURCE_ROOT or clone https://github.com/colinagent/gbrain next to this repo." >&2
+      echo "Set OPENBRAIN_GBRAIN_SOURCE_ROOT or clone https://github.com/garrytan/gbrain next to this repo." >&2
       exit 1
     }
     echo "[gbrain-cli] platform=${platform} target=${target} source=${GBRAIN_SOURCE_ROOT} out=${out}"
