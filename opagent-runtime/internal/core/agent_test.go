@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -314,7 +315,7 @@ func TestCurrentSystemPrompt_AppendsGBrainSourceScope(t *testing.T) {
 	}
 }
 
-func TestCurrentSystemPrompt_AppendsGBrainPublicBrainScope(t *testing.T) {
+func TestCurrentSystemPrompt_IgnoresLegacyPublicBrainScope(t *testing.T) {
 	loop := &AgentLoop{
 		Agent: &Agent{
 			AgentID:   "agent-gbrain",
@@ -332,17 +333,8 @@ func TestCurrentSystemPrompt_AppendsGBrainPublicBrainScope(t *testing.T) {
 		},
 	}
 
-	got := loop.currentSystemPrompt()
-	for _, want := range []string{
-		`This turn was started from OpenBrain graph scope "OpenBrain's Brain".`,
-		"Limit GBrain Cloud retrieval to these public source IDs:",
-		"- ws-alpha (Alpha)",
-		"- ws-beta",
-		"use one allowed source_id at a time",
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("currentSystemPrompt() = %q, want substring %q", got, want)
-		}
+	if got := loop.currentSystemPrompt(); got != "Base prompt." {
+		t.Fatalf("currentSystemPrompt() = %q, want legacy public-brain scope ignored", got)
 	}
 }
 
@@ -415,8 +407,9 @@ func TestApplyGBrainQueryScopeToToolCallRejectsOutsideSource(t *testing.T) {
 	}
 }
 
-func TestApplyGBrainQueryScopeToToolCallRequiresSourceForPublicBrainScope(t *testing.T) {
-	_, err := applyGBrainQueryScopeToToolCall(op.Meta{
+func TestApplyGBrainQueryScopeToToolCallIgnoresLegacyPublicBrainScope(t *testing.T) {
+	input := map[string]any{"query": "architecture"}
+	params, err := applyGBrainQueryScopeToToolCall(op.Meta{
 		"gbrainQueryScope": op.Meta{
 			"kind": "publicBrain",
 			"sources": []op.Meta{
@@ -424,9 +417,9 @@ func TestApplyGBrainQueryScopeToToolCallRequiresSourceForPublicBrainScope(t *tes
 				{"sourceID": "ws-beta"},
 			},
 		},
-	}, "tools-gbrain-cloud", "query", gbrainSourceIDToolSchema(), map[string]any{"query": "architecture"})
-	if err == nil || !strings.Contains(err.Error(), "multiple source IDs") {
-		t.Fatalf("err = %v, want multiple-source guidance", err)
+	}, "tools-gbrain-cloud", "query", gbrainSourceIDToolSchema(), input)
+	if err != nil || !reflect.DeepEqual(params, input) {
+		t.Fatalf("params/err = %#v/%v, want unscoped input", params, err)
 	}
 }
 
@@ -516,6 +509,28 @@ func TestNewAgent_IncludesSystemTaggedToolServersWhenMounted(t *testing.T) {
 	}
 	if agent.ToolSpecs["rg_search"] == nil {
 		t.Fatalf("rg_search tool missing from assembled tool specs: %+v", agent.ToolSpecs)
+	}
+}
+
+func TestNewAgent_ExpandsCWDWhenLoadingPromptFromFile(t *testing.T) {
+	baseDir := t.TempDir()
+	agentPath := filepath.Join(baseDir, "agents", "coder", ".agent", "AGENT.md")
+	writeAgentTestFile(t, agentPath, "---\nname: coder\n---\nCurrent working directory: ${cwd}\n")
+	agentNode := op.BuildNode("user", "test-host", op.NodeKindAgent, op.PathToURI(agentPath), op.EnvLocal, nil, op.Run{}, nil, &op.AgentMeta{
+		Name: "coder",
+	})
+	cwd := filepath.Join(baseDir, "workspace")
+
+	agent, err := NewAgent(context.Background(), agentNode, op.Meta{"cwd": cwd})
+	if err != nil {
+		t.Fatalf("NewAgent(): %v", err)
+	}
+	if !strings.Contains(agent.Sysprompt, "Current working directory: "+cwd) || strings.Contains(agent.Sysprompt, "${cwd}") {
+		t.Fatalf("system prompt did not expand cwd: %q", agent.Sysprompt)
+	}
+
+	if _, err := NewAgent(context.Background(), agentNode, op.Meta{}); err == nil || !strings.Contains(err.Error(), "meta.cwd") {
+		t.Fatalf("NewAgent() missing cwd error = %v", err)
 	}
 }
 

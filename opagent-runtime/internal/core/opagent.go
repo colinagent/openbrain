@@ -10,6 +10,7 @@ import (
 	"github.com/colinagent/openbrain/opagent-runtime/internal/config"
 	"github.com/colinagent/openbrain/opagent-runtime/internal/memory/cache"
 	"github.com/colinagent/openbrain/opagent-runtime/internal/scan"
+	"github.com/colinagent/openbrain/opagent-runtime/packages/agentctx"
 )
 
 const unauthorizedError = "unauthorized: please sign in first"
@@ -243,7 +244,15 @@ func ConfigSystemGetHandler(ctx context.Context, req *op.OpNodeRequest) (*op.OpN
 	if cfg == nil {
 		return nil, fmt.Errorf("system config is nil")
 	}
-	raw, err := json.Marshal(cfg)
+	defaultWorkspace := agentctx.DefaultConversationWorkdir(cfg.BaseDir)
+	if defaultWorkspace == "" {
+		return nil, fmt.Errorf("system default workspace is empty")
+	}
+	result := op.SystemConfigResult{
+		SystemConfig:     *cfg,
+		DefaultWorkspace: defaultWorkspace,
+	}
+	raw, err := json.Marshal(result)
 	if err != nil {
 		return nil, fmt.Errorf("marshal host config: %w", err)
 	}

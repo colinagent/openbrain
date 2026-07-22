@@ -55,7 +55,7 @@ func parseSystemConfig(configDir string) {
 	}
 
 	// base Dir
-	baseDir, err := common.ExpandHome(CmdBaseDir)
+	baseDir, err := common.ResolveAbsolutePath("", CmdBaseDir)
 	if err != nil {
 		slog.Warn("failed to resolve base dir", "error", err)
 		return

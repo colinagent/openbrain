@@ -33,6 +33,10 @@ func Start() {
 		slog.Error("failed to create run directory", "error", err)
 		os.Exit(1)
 	}
+	if _, err := ensureDefaultConversationWorkspace(cfg); err != nil {
+		slog.Error("failed to create default conversation workspace", "error", err)
+		os.Exit(1)
+	}
 	markRuntimeProcessStarted(cfg.BaseDir)
 
 	pidMgr := pidlock.New(runDir)

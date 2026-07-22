@@ -21,6 +21,25 @@ func TestShouldBootstrapLegacyCanonicalWorkspaceDefaultOff(t *testing.T) {
 	}
 }
 
+func TestEnsureDefaultConversationWorkspace(t *testing.T) {
+	baseDir := t.TempDir()
+	workspaceRoot, err := ensureDefaultConversationWorkspace(&op.SystemConfig{BaseDir: baseDir})
+	if err != nil {
+		t.Fatalf("ensureDefaultConversationWorkspace(): %v", err)
+	}
+	want := filepath.Join(baseDir, "workspace")
+	if workspaceRoot != want {
+		t.Fatalf("workspaceRoot = %q, want %q", workspaceRoot, want)
+	}
+	info, err := os.Stat(workspaceRoot)
+	if err != nil {
+		t.Fatalf("stat workspace: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("workspaceRoot is not a directory: %s", workspaceRoot)
+	}
+}
+
 func TestEnsureCanonicalWorkspaceBootstrapSeedsDefaultWorkspace(t *testing.T) {
 	baseDir := t.TempDir()
 	cfg := &op.SystemConfig{BaseDir: baseDir, HostID: "test-host", Env: op.EnvLocal}

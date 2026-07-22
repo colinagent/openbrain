@@ -17,7 +17,7 @@ const (
 	DefaultEnv                          = op.EnvLocal
 	DefaultCloudOSBaseURL               = "http://127.0.0.1:8080"
 	DefaultMessageStorage               = "markdown"
-	DefaultRuntimeUpdateManifestURL     = "https://github.com/colinagent/openbrain/releases/latest/download/runtime-manifest.json"
+	DefaultRuntimeUpdateManifestURL     = "https://download.op-agent.com/runtime/latest/manifest.json"
 	DefaultRuntimeUpdateCheckInterval   = "10m"
 	DefaultRuntimeUpdateCheckTimeout    = "8s"
 	DefaultRuntimeUpdateIdleGracePeriod = "15s"
