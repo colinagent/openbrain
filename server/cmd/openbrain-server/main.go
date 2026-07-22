@@ -23,6 +23,7 @@ import (
 	gbrainserver "github.com/colinagent/openbrain/server/internal/server/gbrain"
 	hostcfg "github.com/colinagent/openbrain/server/internal/server/hostcfg"
 	"github.com/colinagent/openbrain/server/internal/server/notify"
+	remotecontrol "github.com/colinagent/openbrain/server/internal/server/remotecontrol"
 	"github.com/colinagent/openbrain/server/internal/server/resources"
 	"github.com/colinagent/openbrain/server/internal/server/sse"
 	"github.com/colinagent/openbrain/server/internal/server/transfer"
@@ -89,6 +90,27 @@ func main() {
 	if err != nil {
 		log.Fatalf("setupFromHostConfig: %v", err)
 	}
+	remoteConfig, err := remotecontrol.ConfigFromEnvironment()
+	if err != nil {
+		log.Fatalf("remote-control config: %v", err)
+	}
+	remoteDispatcher := remotecontrol.NewDispatcher(remoteConfig)
+	remoteManager, err := remotecontrol.NewManager(remoteConfig, hostcfg.Get(), remoteDispatcher, hostCfg.System.BaseDir, Version)
+	if err != nil {
+		log.Fatalf("remote-control manager: %v", err)
+	}
+	if err := remotecontrol.RegisterMinimumHandlers(remoteDispatcher, hostcfg.Get(), remoteManager); err != nil {
+		log.Fatalf("remote-control handlers: %v", err)
+	}
+	if err := remotecontrol.RegisterConversationHandlers(remoteDispatcher, hostcfg.Get(), chatSvc); err != nil {
+		log.Fatalf("remote-control conversation handlers: %v", err)
+	}
+	if err := remotecontrol.RegisterFileHandlers(remoteDispatcher, hostcfg.Get()); err != nil {
+		log.Fatalf("remote-control file handlers: %v", err)
+	}
+	if err := remoteManager.Start(ctx); err != nil {
+		log.Fatalf("remote-control start: %v", err)
+	}
 
 	wsServer.GetHandler().SetMarketplaceService(sharedmarketplace.NewService(hostCfg.System.BaseDir, sharedmarketplace.Options{}))
 
@@ -103,6 +125,7 @@ func main() {
 	router.Use(recoveryWithSlog())
 	router.Use(requestLogMiddleware(*verbose))
 	router.Use(corsMiddleware())
+	remotecontrol.NewManagementHandler(remoteManager).Register(router)
 
 	wsServer.RegisterHandlers(router)
 	createHandler := chat.NewCreateHandler(chatSvc)

@@ -187,16 +187,20 @@ func buildArgs(query Query, root string) []string {
 	if query.WholeWord {
 		args = append(args, "-w")
 	}
+	globFlag := "-g"
+	if query.InsensitiveGlobs {
+		globFlag = "--iglob"
+	}
 	for _, include := range query.Includes {
 		include = strings.TrimSpace(include)
 		if include != "" {
-			args = append(args, "-g", include)
+			args = append(args, globFlag, include)
 		}
 	}
 	for _, exclude := range query.Excludes {
 		exclude = strings.TrimSpace(exclude)
 		if exclude != "" {
-			args = append(args, "-g", "!"+exclude)
+			args = append(args, globFlag, "!"+exclude)
 		}
 	}
 	args = append(args, query.Pattern, root)

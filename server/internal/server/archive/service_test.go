@@ -16,13 +16,21 @@ import (
 )
 
 type stubCoreClient struct {
-	baseDir string
-	active  []op.ThreadRuntimeInfo
-	updates []op.ThreadMetaUpdateParams
+	baseDir                 string
+	missingDefaultWorkspace bool
+	active                  []op.ThreadRuntimeInfo
+	updates                 []op.ThreadMetaUpdateParams
 }
 
-func (s *stubCoreClient) GetSystemConfig(context.Context) (*op.SystemConfig, error) {
-	return &op.SystemConfig{BaseDir: s.baseDir}, nil
+func (s *stubCoreClient) GetSystemConfig(context.Context) (*op.SystemConfigResult, error) {
+	defaultWorkspace := filepath.Join(s.baseDir, "workspace")
+	if s.missingDefaultWorkspace {
+		defaultWorkspace = ""
+	}
+	return &op.SystemConfigResult{
+		SystemConfig:     op.SystemConfig{BaseDir: s.baseDir},
+		DefaultWorkspace: defaultWorkspace,
+	}, nil
 }
 
 func (s *stubCoreClient) ListActiveThreads(context.Context) ([]op.ThreadRuntimeInfo, error) {
@@ -56,6 +64,17 @@ func writeChatFile(t *testing.T, path, threadID, title, body string) {
 	}, "\n")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func TestRunRequiresRuntimeDefaultWorkspace(t *testing.T) {
+	service := NewService(&stubCoreClient{
+		baseDir:                 t.TempDir(),
+		missingDefaultWorkspace: true,
+	})
+	_, err := service.Run(context.Background(), protocol.ArchiveCleanupParams{})
+	if err == nil || !strings.Contains(err.Error(), "defaultWorkspace") {
+		t.Fatalf("Run() error = %v, want missing defaultWorkspace", err)
 	}
 }
 

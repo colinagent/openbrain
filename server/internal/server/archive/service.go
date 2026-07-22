@@ -77,10 +77,14 @@ func (s *Service) Run(ctx context.Context, params protocol.ArchiveCleanupParams)
 	if baseDir == "" {
 		return nil, fmt.Errorf("system baseDir is required")
 	}
+	defaultWorkspace := normalizePath(sysCfg.DefaultWorkspace)
+	if defaultWorkspace == "" {
+		return nil, fmt.Errorf("system defaultWorkspace is required")
+	}
 	chatindex.SetBaseDir(baseDir)
 	workspaceRoots := normalizePathList(append(
 		normalizePathList(params.WorkspaceRoots),
-		agentctx.DefaultConversationWorkdir(baseDir),
+		defaultWorkspace,
 	))
 
 	r := &runner{

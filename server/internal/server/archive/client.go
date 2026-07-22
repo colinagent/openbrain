@@ -11,7 +11,7 @@ import (
 )
 
 type CoreClient interface {
-	GetSystemConfig(ctx context.Context) (*op.SystemConfig, error)
+	GetSystemConfig(ctx context.Context) (*op.SystemConfigResult, error)
 	ListActiveThreads(ctx context.Context) ([]op.ThreadRuntimeInfo, error)
 	UpdateThreadMeta(ctx context.Context, params op.ThreadMetaUpdateParams) (*op.ThreadMeta, error)
 }
@@ -39,7 +39,7 @@ func (c *hostCoreClient) session() (*op.ServerSession, error) {
 	return session, nil
 }
 
-func (c *hostCoreClient) GetSystemConfig(ctx context.Context) (*op.SystemConfig, error) {
+func (c *hostCoreClient) GetSystemConfig(ctx context.Context) (*op.SystemConfigResult, error) {
 	session, err := c.session()
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func (c *hostCoreClient) GetSystemConfig(ctx context.Context) (*op.SystemConfig,
 	if err != nil {
 		return nil, err
 	}
-	var cfg op.SystemConfig
+	var cfg op.SystemConfigResult
 	if err := decodeHostJSONContent(res.Content, &cfg); err != nil {
 		return nil, err
 	}

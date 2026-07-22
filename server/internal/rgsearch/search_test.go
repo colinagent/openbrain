@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -27,6 +28,27 @@ func TestSearchParsesMatchOutputAndResolvesRelativePaths(t *testing.T) {
 	if got := result.Files[0].Matches[0].Column; got != 7 {
 		t.Fatalf("column = %d, want 7", got)
 	}
+}
+
+func TestBuildArgsUsesInsensitiveGlobsWhenRequested(t *testing.T) {
+	args := buildArgs(Query{
+		Pattern: "needle", Includes: []string{"*.md"}, Excludes: []string{"*.pem"},
+		InsensitiveGlobs: true,
+	}, "/workspace")
+	if slices.Contains(args, "-g") {
+		t.Fatalf("args contain case-sensitive glob flag: %v", args)
+	}
+	want := []string{"--iglob", "*.md", "--iglob", "!*.pem"}
+	for index := 0; index+1 < len(args); index++ {
+		if args[index] == want[0] && args[index+1] == want[1] {
+			want = want[2:]
+			index++
+			if len(want) == 0 {
+				return
+			}
+		}
+	}
+	t.Fatalf("args = %v, missing insensitive include/exclude globs", args)
 }
 
 func TestSearchMarksResultTruncatedWhenLimitReached(t *testing.T) {

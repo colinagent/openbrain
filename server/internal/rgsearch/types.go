@@ -1,15 +1,16 @@
 package rgsearch
 
 type Query struct {
-	Root       string
-	Pattern    string
-	Regex      bool
-	MatchCase  bool
-	WholeWord  bool
-	Includes   []string
-	Excludes   []string
-	MaxFiles   int
-	MaxMatches int
+	Root             string
+	Pattern          string
+	Regex            bool
+	MatchCase        bool
+	WholeWord        bool
+	Includes         []string
+	Excludes         []string
+	InsensitiveGlobs bool
+	MaxFiles         int
+	MaxMatches       int
 }
 
 type Match struct {

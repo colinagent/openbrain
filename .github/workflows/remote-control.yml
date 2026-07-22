@@ -1,0 +1,31 @@
+name: Remote Control Contract
+
+on:
+  pull_request:
+    paths:
+      - "opagent-protocol/go-sdk/remotecontrol/**"
+      - "server/internal/server/remotecontrol/**"
+      - ".github/workflows/remote-control.yml"
+  push:
+    branches: [main]
+    paths:
+      - "opagent-protocol/go-sdk/remotecontrol/**"
+      - "server/internal/server/remotecontrol/**"
+      - ".github/workflows/remote-control.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  go-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.work
+          cache: true
+      - run: go test ./remotecontrol
+        working-directory: opagent-protocol/go-sdk
+      - run: go test ./internal/server/remotecontrol
+        working-directory: server
