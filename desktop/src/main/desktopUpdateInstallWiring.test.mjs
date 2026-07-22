@@ -9,6 +9,10 @@ const mainSource = readFileSync(
   path.join(__dirname, 'main.ts'),
   'utf8',
 );
+const desktopUpdaterSource = readFileSync(
+  path.join(__dirname, 'desktopUpdater.ts'),
+  'utf8',
+);
 
 test('desktop update install IPC routes through the main-process install request', () => {
   assert.match(mainSource, /ipcMain\.handle\('desktopUpdate:getState'/);
@@ -24,4 +28,9 @@ test('desktop update install requests window prepare-close instead of calling qu
 test('desktop update install only finalizes after awaited windows close', () => {
   assert.match(mainSource, /desktopUpdateInstallCoordinator\.markWindowClosed\(win\.id\)/);
   assert.match(mainSource, /maybeFinalizeDesktopUpdateInstall\(\)/);
+});
+
+test('desktop updater defaults to public download feed', () => {
+  assert.match(desktopUpdaterSource, /DEFAULT_DESKTOP_UPDATE_URL = 'https:\/\/download\.op-agent\.com\/desktop\/latest'/);
+  assert.match(desktopUpdaterSource, /OPENBRAIN_DESKTOP_UPDATE_URL \|\| DEFAULT_DESKTOP_UPDATE_URL/);
 });

@@ -23,7 +23,7 @@ export type RuntimeReleaseManifest = {
 };
 
 export const DEFAULT_RUNTIME_MANIFEST_URL =
-  'https://github.com/colinagent/openbrain/releases/latest/download/runtime-manifest.json';
+  'https://download.op-agent.com/runtime/latest/manifest.json';
 
 export function getLocalPlatform(): OpenBrainPlatform {
   const os: OpenBrainOs = (() => {

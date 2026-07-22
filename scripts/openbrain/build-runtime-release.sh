@@ -11,14 +11,13 @@ BUILD_ROOT="${OPENBRAIN_RUNTIME_BUILD_ROOT:-${REPO_ROOT}/.tmp/openbrain-runtime-
 CHECKSUMS_NAME="runtime-SHA256SUMS"
 VERSION="${OPENBRAIN_RELEASE_VERSION:-${GITHUB_REF_NAME:-dev}}"
 VERSION="${VERSION#openbrain-v}"
-TAG="${OPENBRAIN_RELEASE_TAG:-openbrain-v${VERSION}}"
-RELEASE_BASE_URL="${OPENBRAIN_RELEASE_BASE_URL:-https://github.com/colinagent/openbrain/releases/download/${TAG}}"
+RELEASE_BASE_URL="${OPENBRAIN_RELEASE_BASE_URL:-https://download.op-agent.com/runtime/${VERSION}}"
 
 usage() {
   cat <<'EOF'
 usage: scripts/openbrain/build-runtime-release.sh [platform...]
 
-Build OpenBrain runtime release assets for GitHub Releases.
+Build OpenBrain runtime release assets for the public download endpoint.
 
 Platforms:
   darwin-arm64
@@ -28,13 +27,12 @@ Platforms:
 
 Environment:
   OPENBRAIN_RELEASE_VERSION       Release version without the openbrain-v prefix.
-  OPENBRAIN_RELEASE_TAG           Release tag. Defaults to openbrain-v$OPENBRAIN_RELEASE_VERSION.
-  OPENBRAIN_RELEASE_BASE_URL      Base URL used in runtime-manifest.json.
+  OPENBRAIN_RELEASE_BASE_URL      Base URL used in runtime-manifest.json. Defaults to the versioned public runtime download URL.
   OPENBRAIN_RUNTIME_RELEASE_DIR   Output directory.
   OPENBRAIN_RUNTIME_BUILD_ROOT    Temporary build root.
   OPENBRAIN_RIPGREP_VERSION       ripgrep release version. Defaults to 15.1.0.
-  OPENBRAIN_GBRAIN_SOURCE_ROOT    GBrain fork checkout used when no release tag is set. Default: ../gbrain.
-  OPENBRAIN_GBRAIN_RELEASE_TAG    Optional colinagent/gbrain release tag to download instead of building.
+  OPENBRAIN_GBRAIN_SOURCE_ROOT    Upstream GBrain checkout used when no release tag is set. Default: ../gbrain.
+  OPENBRAIN_GBRAIN_RELEASE_TAG    Optional upstream-aligned colinagent/gbrain mirror release tag to download instead of building.
   OPENBRAIN_GBRAIN_RELEASE_BASE_URL
                                   Optional GBrain release asset base URL. Defaults to GitHub release URL for the tag.
 EOF
@@ -245,7 +243,7 @@ stage_gbrain_binary() {
     require_cmd bun
     [[ -f "${GBRAIN_SOURCE_ROOT}/src/cli.ts" ]] || {
       echo "GBrain source not found: ${GBRAIN_SOURCE_ROOT}/src/cli.ts" >&2
-      echo "Set OPENBRAIN_GBRAIN_SOURCE_ROOT or clone https://github.com/colinagent/gbrain next to this repo." >&2
+      echo "Set OPENBRAIN_GBRAIN_SOURCE_ROOT or clone https://github.com/garrytan/gbrain next to this repo." >&2
       exit 1
     }
     echo "[openbrain-runtime] gbrain ${platform}: build from ${GBRAIN_SOURCE_ROOT}"

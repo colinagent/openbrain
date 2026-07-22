@@ -6,7 +6,7 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 DESKTOP_ROOT="${REPO_ROOT}/desktop"
 VERSION="${2:-${OPENBRAIN_RELEASE_VERSION:-$(node -p "require('${DESKTOP_ROOT}/package.json').version")}}"
 PLATFORM="${1:-}"
-MANIFEST_URL="${OPENBRAIN_RUNTIME_MANIFEST_URL:-https://github.com/colinagent/openbrain/releases/latest/download/runtime-manifest.json}"
+MANIFEST_URL="${OPENBRAIN_RUNTIME_MANIFEST_URL:-https://download.op-agent.com/runtime/latest/manifest.json}"
 
 usage() {
   cat <<'EOF'
@@ -14,7 +14,8 @@ usage: scripts/openbrain/stage-desktop-runtime-inputs.sh <platform> [version]
 
 Stage runtime bundle/bootstrap inputs required by openbrain-desktop packaging.
 This script consumes runtime assets and stages them for OpenBrain desktop
-packaging. Release publishing happens through GitHub Releases.
+packaging. Published runtime assets are read from the public download endpoint
+by default.
 
 Platforms:
   darwin-arm64
@@ -25,7 +26,7 @@ Environment:
   OPENBRAIN_RUNTIME_BUNDLE_PATH   Existing local bundle.tar.gz path.
   OPENBRAIN_BOOTSTRAP_PATH        Existing local bootstrap binary path.
   OPENBRAIN_RUNTIME_VERSION       Runtime version when staging from local files.
-  OPENBRAIN_RUNTIME_MANIFEST_URL  Runtime manifest URL. Defaults to the latest OpenBrain GitHub Release.
+  OPENBRAIN_RUNTIME_MANIFEST_URL  Runtime manifest URL. Defaults to the public OpenBrain runtime manifest.
 EOF
 }
 

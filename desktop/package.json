@@ -27,10 +27,6 @@
     "dist:mac": "npm run build:icon:mac && npm run build && npm run build:runtime:mac && electron-builder --mac --arm64",
     "dist:win": "npm run build && npm run build:runtime:win && electron-builder --win --x64",
     "dist:linux": "npm run build && npm run build:runtime:linux && electron-builder --linux --x64",
-    "release:github": "npm run release:github:mac",
-    "release:github:mac": "npm run build:icon:mac && npm run build && npm run build:runtime:mac && electron-builder --mac --arm64 --publish always",
-    "release:github:win": "npm run build && npm run build:runtime:win && electron-builder --win --x64 --publish always",
-    "release:github:linux": "npm run build && npm run build:runtime:linux && electron-builder --linux --x64 --publish always",
     "build:runtime:mac": "bash scripts/build-runtime-bundle.sh darwin-arm64",
     "build:runtime:win": "bash scripts/build-runtime-bundle.sh windows-amd64",
     "build:runtime:linux": "bash scripts/build-runtime-bundle.sh linux-amd64"

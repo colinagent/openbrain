@@ -8,6 +8,7 @@ import {
 
 let controller: DesktopUpdateController | null = null;
 const DESKTOP_UPDATE_POLL_INTERVAL_MS = 10 * 60 * 1000;
+export const DEFAULT_DESKTOP_UPDATE_URL = 'https://download.op-agent.com/desktop/latest';
 
 export type { DesktopUpdateState } from './desktopUpdateController';
 
@@ -18,7 +19,7 @@ export function getDesktopUpdateController(): DesktopUpdateController {
       currentVersion: app.getVersion(),
       updater: autoUpdater,
       pollIntervalMs: DESKTOP_UPDATE_POLL_INTERVAL_MS,
-      feedURL: process.env.OPENBRAIN_DESKTOP_UPDATE_URL,
+      feedURL: process.env.OPENBRAIN_DESKTOP_UPDATE_URL || DEFAULT_DESKTOP_UPDATE_URL,
     });
   }
   return controller;

@@ -32,6 +32,8 @@ global_patterns=(
   '/gbrain/mcp'
   'openbrain-dev'
   '/Users/colin'
+  'io[.]openbrain[.]ios'
+  'OpenBrainMobile'
 )
 
 openbrain_patterns=(
@@ -48,7 +50,8 @@ for pattern in \
   '^[.]agent/' \
   '^[.]claude/' \
   '^[.]context/' \
-  '^gbrain/'
+  '^gbrain/' \
+  '^mobile/ios/'
 do
   if matches="$(git ls-files | rg -n -e "${pattern}")"; then
     echo "Forbidden public tracked path: ${pattern}" >&2

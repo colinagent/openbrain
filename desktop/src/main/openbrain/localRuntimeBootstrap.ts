@@ -4,7 +4,7 @@ import { mainT } from '../i18n/main';
 import { fetchReleaseManifest, getLocalPlatform, pickPlatformAssets } from './releaseManifest';
 
 export const DEFAULT_LOCAL_RUNTIME_MANIFEST_URL =
-  'https://github.com/colinagent/openbrain/releases/latest/download/runtime-manifest.json';
+  'https://download.op-agent.com/runtime/latest/manifest.json';
 
 type BootstrapCommand = 'status' | 'ensure';
 

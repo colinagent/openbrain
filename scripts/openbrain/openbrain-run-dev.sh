@@ -98,7 +98,7 @@ Environment:
                                   Local simple-memory agent source root. Default: ./agents/simple-memory
   OPENBRAIN_GBRAIN_AGENT_SOURCE_ROOT
                                   Local gbrain agent source root. Default: ./agents/gbrain
-  OPENBRAIN_GBRAIN_SOURCE_ROOT    Local colinagent/gbrain fork checkout. Default: ../gbrain
+  OPENBRAIN_GBRAIN_SOURCE_ROOT    Local upstream garrytan/gbrain checkout. Default: ../gbrain
   OPENBRAIN_TOOLS_SOURCE_ROOT     Local tools source root. Default: ./tools
   OPENBRAIN_CLOUD_SYNC_SKILL_SOURCE_ROOT
                                   Local OpenBrain Cloud Sync skill source root. Default: ./skills/openbrain-cloud-sync
@@ -287,7 +287,7 @@ build_and_install_gbrain() {
 
   require_cmd bun
   [[ -f "${OPENBRAIN_GBRAIN_SOURCE_ROOT}/src/cli.ts" ]] || {
-    die "local gbrain CLI source not found: ${OPENBRAIN_GBRAIN_SOURCE_ROOT}/src/cli.ts; set OPENBRAIN_GBRAIN_SOURCE_ROOT or clone https://github.com/colinagent/gbrain next to this repo"
+    die "local gbrain CLI source not found: ${OPENBRAIN_GBRAIN_SOURCE_ROOT}/src/cli.ts; set OPENBRAIN_GBRAIN_SOURCE_ROOT or clone https://github.com/garrytan/gbrain next to this repo"
   }
   mkdir -p "$RUNTIME_BIN_DIR"
   rm -f "$tmp_bin"
