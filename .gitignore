@@ -25,3 +25,6 @@ test/fixtures/pglite-snapshot.tar
 test/fixtures/pglite-snapshot.version
 
 reports/network-intelligence/
+
+# The proprietary iOS client is owned by the private development repository.
+/mobile/ios/

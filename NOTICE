@@ -26,8 +26,8 @@ GBrain Integration
 
 OpenBrain can package a GBrain CLI binary and ships a GBrain-backed agent
 integration. GBrain source is maintained outside this repository under the MIT
-License, with OpenBrain integration flowing through the public
-`colinagent/gbrain` fork of `garrytan/gbrain`.
+License in `garrytan/gbrain`. OpenBrain builds that upstream source directly;
+the public `colinagent/gbrain` repository is an upstream-aligned binary mirror.
 
 Third-Party Components
 ----------------------

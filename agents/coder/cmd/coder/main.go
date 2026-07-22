@@ -113,6 +113,10 @@ func buildPrompt(ctx context.Context, session *op.ServerSession, agentFile strin
 	}
 	platform := runtime.GOOS
 	basePrompt = ExpandPlatformVariables(basePrompt, platform)
+	basePrompt, err = ExpandCwdVariables(basePrompt, metaString(meta, "cwd"))
+	if err != nil {
+		return "", err
+	}
 
 	cwdAgentsPath, err := ResolveCwdAgentsPath(metaString(meta, "cwd"))
 	if err != nil {

@@ -131,7 +131,7 @@ func TestBuildPromptDoesNotInjectMemoryPath(t *testing.T) {
 	ctx := context.Background()
 	tempDir := t.TempDir()
 	agentFile := filepath.Join(tempDir, "AGENT.md")
-	if err := os.WriteFile(agentFile, []byte("---\nname: coder\n---\nBase prompt"), 0o644); err != nil {
+	if err := os.WriteFile(agentFile, []byte("---\nname: coder\n---\nBase prompt\nCurrent working directory: ${cwd}"), 0o644); err != nil {
 		t.Fatalf("write agent file: %v", err)
 	}
 
@@ -169,12 +169,39 @@ func TestBuildPromptDoesNotInjectMemoryPath(t *testing.T) {
 	}
 	defer clientSession.Close()
 
-	prompt, err := buildPrompt(ctx, serverSession, agentFile, op.Meta{"agentID": "agent-coder"})
+	prompt, err := buildPrompt(ctx, serverSession, agentFile, op.Meta{
+		"agentID": "agent-coder",
+		"cwd":     tempDir,
+	})
 	if err != nil {
 		t.Fatalf("buildPrompt(): %v", err)
 	}
 	if strings.Contains(prompt, "memory.md") || strings.Contains(prompt, "OpAgent Memory") {
 		t.Fatalf("prompt unexpectedly contains memory instructions:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Current working directory: "+tempDir) || strings.Contains(prompt, "${cwd}") {
+		t.Fatalf("prompt missing expanded cwd:\n%s", prompt)
+	}
+}
+
+func TestExpandCwdVariablesUsesPerRequestWorkingDirectory(t *testing.T) {
+	prompt := "Stable prompt.\n\nCurrent working directory: ${cwd}"
+	first, err := ExpandCwdVariables(prompt, " /workspace/one ")
+	if err != nil {
+		t.Fatalf("ExpandCwdVariables(first): %v", err)
+	}
+	second, err := ExpandCwdVariables(prompt, "/workspace/two")
+	if err != nil {
+		t.Fatalf("ExpandCwdVariables(second): %v", err)
+	}
+	if first != "Stable prompt.\n\nCurrent working directory: /workspace/one" {
+		t.Fatalf("first prompt = %q", first)
+	}
+	if second != "Stable prompt.\n\nCurrent working directory: /workspace/two" {
+		t.Fatalf("second prompt = %q", second)
+	}
+	if _, err := ExpandCwdVariables(prompt, ""); err == nil || !strings.Contains(err.Error(), "meta.cwd") {
+		t.Fatalf("missing cwd error = %v", err)
 	}
 }
 
