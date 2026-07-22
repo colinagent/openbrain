@@ -1,15 +1,14 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import net from 'node:net';
 import { DEFAULT_RUNTIME_MANIFEST_URL } from '../openbrain/releaseManifest';
+import { waitForRuntimeSystemConfig } from '../runtimeSystemConfig';
 import { resolveHostLabel, sanitizeSshHost } from '../ssh/sshHostUtils';
 import type { SshHost, SshHostWithSecrets } from '../ssh/sshTypes';
 import { fetchLatestRuntimeRelease, resolveRemoteRuntimeTarget, type LatestRelease } from './remoteRuntimeRelease';
 import {
   buildInstallScript,
   buildStartExistingScript,
-  resolveRemoteWorkspaceDir,
 } from './remoteRuntimeScripts';
-import { getRemoteDefaultWorkspace } from './remoteRuntimeState';
 import { runSsh, startPortForward } from './ssh2Transport';
 
 export type { SshHost } from '../ssh/sshTypes';
@@ -169,12 +168,13 @@ async function tryConnectExisting(
   host: SshHostWithSecrets,
   remotePort: number,
   remoteHome: string,
-  workspaceDir: string,
 ) {
   const { key: forwardKey, entry } = await acquirePortForward(host, remotePort);
   const httpUrl = `http://127.0.0.1:${entry.localPort}/health`;
+  let systemConfig;
   try {
     await waitForHealth(httpUrl);
+    systemConfig = await waitForRuntimeSystemConfig(`ws://127.0.0.1:${entry.localPort}/ws`);
   } catch (error) {
     releasePortForward(forwardKey);
     throw error;
@@ -186,7 +186,7 @@ async function tryConnectExisting(
     wsUrl: `ws://127.0.0.1:${entry.localPort}/ws`,
     httpUrl,
     remoteHome,
-    workspaceDir,
+    workspaceDir: systemConfig.defaultWorkspace,
     installDir: joinRemoteSessionPath(remoteHome, '.openbrain', 'agents', 'opagent-server'),
   };
   return { session, forwardKey };
@@ -204,12 +204,10 @@ export async function connectSsh(
   const manifestUrl = options.manifestUrl ?? DEFAULT_MANIFEST_URL;
   const target = await resolveRemoteRuntimeTarget(host);
   const remoteHome = target.home;
-  const remoteDefaultWorkspace = await getRemoteDefaultWorkspace(host, target);
-  const workspaceDir = resolveRemoteWorkspaceDir(remoteDefaultWorkspace ?? undefined, remoteHome);
 
   let existingRuntimeError: unknown = null;
   try {
-    const { session, forwardKey } = await tryConnectExisting(host, remotePort, remoteHome, workspaceDir);
+    const { session, forwardKey } = await tryConnectExisting(host, remotePort, remoteHome);
     activeSessions.set(getSessionKey(windowId, tabId), { session, forwardKey });
     return session;
   } catch (error) {
@@ -219,7 +217,7 @@ export async function connectSsh(
   let startExistingError: unknown = null;
   try {
     await runSsh(host, buildStartExistingScript({ remotePort, target }), 60_000);
-    const { session, forwardKey } = await tryConnectExisting(host, remotePort, remoteHome, workspaceDir);
+    const { session, forwardKey } = await tryConnectExisting(host, remotePort, remoteHome);
     activeSessions.set(getSessionKey(windowId, tabId), { session, forwardKey });
     return session;
   } catch (error) {
@@ -253,7 +251,7 @@ export async function connectSsh(
     );
   }
 
-  const { session, forwardKey } = await tryConnectExisting(host, remotePort, remoteHome, workspaceDir);
+  const { session, forwardKey } = await tryConnectExisting(host, remotePort, remoteHome);
   activeSessions.set(getSessionKey(windowId, tabId), { session, forwardKey });
   return session;
 }

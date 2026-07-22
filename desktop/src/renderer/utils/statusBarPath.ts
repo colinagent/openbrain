@@ -1,9 +1,5 @@
-import { isPathInsideRoot } from './chatAgentTarget';
-
 export type StatusBarPathDisplay = {
-  primary: string;
-  suffix?: string;
-  fullPath?: string;
+  label: string;
 };
 
 function normalizePath(path: string | null | undefined): string {
@@ -18,19 +14,8 @@ export function formatStatusBarPathDisplay(
   const file = normalizePath(filePath);
 
   if (!file) {
-    return { primary: dir || 'No folder' };
+    return { label: dir || 'No folder' };
   }
 
-  if (dir && isPathInsideRoot(file, dir)) {
-    if (file === dir) {
-      return { primary: dir, fullPath: file };
-    }
-    return {
-      primary: dir,
-      suffix: file.slice(dir.length + 1),
-      fullPath: file,
-    };
-  }
-
-  return { primary: file, fullPath: file };
+  return { label: file };
 }

@@ -60,6 +60,33 @@
     "idleSleepWhileAppRunningHint": "在整个应用会话期间保持系统唤醒，本地 server 与 runtime 持续可用。屏幕仍可锁定。适合将 OpenBrain 作为远程 Surface 的 hub。",
     "saved": "桌面设置已保存。",
     "loadFailed": "加载桌面设置失败",
-    "saveFailed": "保存桌面设置失败"
+    "saveFailed": "保存桌面设置失败",
+    "remote": {
+      "title": "远程访问",
+      "loadFailed": "加载远程访问失败",
+      "unavailable": "当前构建或全局紧急开关已关闭远程访问。",
+      "enable": "开启",
+      "disable": "关闭",
+      "confirmHint": "OpenBrain 运行期间，电脑会向所选区域保持一条出站加密连接。",
+      "confirmLabel": "我了解配对设备可访问 OpenBrain 明确开放的能力。",
+      "confirmEnable": "开启远程访问",
+      "computer": "电脑",
+      "region": "可用区域",
+      "switchRegion": "切换",
+      "pairDevice": "配对设备",
+      "createCode": "生成配对码",
+      "newCode": "换一个配对码",
+      "qrAlt": "OpenBrain 配对二维码",
+      "shortCode": "短码",
+      "copyCode": "复制配对码",
+      "expiresAt": "{{value}} 失效",
+      "devices": "已配对设备",
+      "refreshDevices": "刷新设备列表",
+      "noDevices": "暂无已配对设备。",
+      "lastSeen": "最后在线 {{value}}",
+      "neverSeen": "尚未连接",
+      "revoke": "撤销设备",
+      "state": { "off": "已关闭", "connecting": "连接中", "online": "在线", "reconnecting": "正在重连" }
+    }
   }
 }

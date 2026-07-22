@@ -15,23 +15,15 @@ export const EditorTabBar: React.FC = () => {
   const tabs = useMemo(() => getEditorDocuments(documents), [documents]);
   const activeTabId = useAppStore((state) => state.activeTabId);
   const pinnedTabId = useAppStore((state) => state.pinnedTabId);
-  const isDirty = useAppStore((state) => state.isDirty);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const closeTab = useAppStore((state) => state.closeTab);
-  const saveFile = useAppStore((state) => state.saveFile);
   const openUntitledTab = useAppStore((state) => state.openUntitledTab);
-  const activeVisible = tabs.some((tab) => tab.id === activeTabId);
 
   const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest('[data-tab-item], [data-tabbar-action]')) {
       return;
     }
     openUntitledTab();
-  };
-
-  const handleSave = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    saveFile();
   };
 
   if (tabs.length === 0) {
@@ -118,16 +110,6 @@ export const EditorTabBar: React.FC = () => {
         </IconButton>
       </div>
       <div className="flex-1 min-w-0" />
-      {activeVisible && isDirty && (
-        <button
-          data-tabbar-action
-          className="flex-shrink-0 px-2 py-1 text-xs text-secondary-text rounded hover:bg-hover-bg"
-          onClick={handleSave}
-          title="Save (Ctrl+S)"
-        >
-          Save
-        </button>
-      )}
     </div>
   );
 };

@@ -79,22 +79,19 @@ function restoreTabManagerState(snapshot: ReturnType<typeof snapshotTabManagerSt
   }));
 }
 
-test('resolveDefaultLocalWorkspacePath prefers the configured default dir', async () => {
+test('resolveDefaultLocalWorkspacePath returns the Runtime-owned default dir', async () => {
   const result = await resolveDefaultLocalWorkspacePath({
-    getDefaultDir: async () => '/Users/example/custom-workspace',
-    getHomeDir: async () => '/Users/example',
+    getDefaultDir: async () => '/runtime/base/workspace',
   });
 
-  assert.equal(result, '/Users/example/custom-workspace');
+  assert.equal(result, '/runtime/base/workspace');
 });
 
-test('resolveDefaultLocalWorkspacePath falls back to the home workspace dir', async () => {
-  const result = await resolveDefaultLocalWorkspacePath({
-    getDefaultDir: async () => '',
-    getHomeDir: async () => '/Users/example',
-  });
-
-  assert.equal(result, '/Users/example/.openbrain/workspace');
+test('resolveDefaultLocalWorkspacePath does not guess from the Desktop home dir', async () => {
+  await assert.rejects(
+    resolveDefaultLocalWorkspacePath({ getDefaultDir: async () => '' }),
+    /Runtime did not provide a default workspace/,
+  );
 });
 
 test('closeWorkspaceTabWithDefaultFallback replaces the last local workspace tab', async (t) => {

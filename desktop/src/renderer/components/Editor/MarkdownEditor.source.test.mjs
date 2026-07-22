@@ -149,6 +149,10 @@ test('markdown editor mounts obsidian-style frontmatter properties panel', () =>
   assert.match(stylesSource, /\.op-md-frontmatter-properties\s*\{/);
   assert.match(stylesSource, /\.cm-md-frontmatter-collapsed\s*\{/);
   assert.match(stylesSource, /\.op-markdown-editor \.cm-scroller\s*\{[^}]*flex-direction:\s*column;/m);
+  assert.match(
+    stylesSource,
+    /\.op-markdown-editor \.cm-content\s*\{[^}]*width:\s*min\(100%, var\(--op-md-content-max-width\)\);[^}]*max-width:\s*var\(--op-md-content-max-width\);/m,
+  );
   assert.match(frontmatterPanelSource, /aria-label="Show frontmatter source"/);
   assert.match(frontmatterPanelSource, /function ObjectPropertyEditor\(/);
   assert.match(frontmatterPanelSource, /function ObjectListPropertyEditor\(/);

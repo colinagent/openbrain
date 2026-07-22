@@ -877,13 +877,10 @@ export default function App() {
     await window.electronAPI.remote.disconnect(tabId);
     const store = getWorkspaceStore(tabId);
     store.getState().setRemoteSession(null);
-    store.getState().connect();
-    const defaultDir = await resolveDefaultLocalWorkspacePath();
     useTabManagerStore.getState().updateTabWorkspace(tabId, {
       kind: 'local',
-      workspacePath: defaultDir,
     });
-    store.getState().setCurrentDir(defaultDir);
+    store.getState().connect();
   }
 
   const handleNewFolderTab = async () => {
@@ -2514,10 +2511,6 @@ export default function App() {
               if (initialWorkspace?.workspacePath) {
                 useTabManagerStore.getState().updateActiveTabWorkspace({ kind: 'local', workspacePath: initialWorkspace.workspacePath });
                 state.setCurrentDir(initialWorkspace.workspacePath);
-              } else if (!state.currentDir) {
-                const defaultDir = await resolveDefaultLocalWorkspacePath();
-                useTabManagerStore.getState().updateActiveTabWorkspace({ kind: 'local', workspacePath: defaultDir });
-                state.setCurrentDir(defaultDir);
               }
             }
           }
@@ -2918,22 +2911,11 @@ export default function App() {
             {getConnectionStateText(displayConnectionState)}
           </span>
           <span
-            className="truncate max-w-[40vw]"
-            title={statusBarPathDisplay.fullPath || statusBarPathDisplay.primary}
+            className="min-w-0 flex-1 truncate"
+            title={statusBarPathDisplay.label}
           >
-            {statusBarPathDisplay.primary}
+            {statusBarPathDisplay.label}
           </span>
-          {statusBarPathDisplay.suffix ? (
-            <>
-              <span className="shrink-0 text-tertiary-text">/</span>
-              <span
-                className="truncate max-w-[34vw]"
-                title={statusBarPathDisplay.fullPath || statusBarPathDisplay.suffix}
-              >
-                {statusBarPathDisplay.suffix}
-              </span>
-            </>
-          ) : null}
           {remoteSession && (
             <span className="truncate max-w-[24vw]">Remote: {remoteSession.hostLabel}</span>
           )}

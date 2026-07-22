@@ -57,24 +57,6 @@ function remoteBootstrapPath(target: RemoteRuntimeTarget) {
   return joinRemotePath(remoteBaseDir(target), 'bin', name);
 }
 
-export function resolveRemoteWorkspaceDir(defaultWorkspace: string | undefined, remoteHome: string): string {
-  const raw = String(defaultWorkspace ?? '').trim();
-  const fallback = remoteHome;
-  if (!raw) {
-    return fallback;
-  }
-  if (raw === '~') {
-    return remoteHome;
-  }
-  if (raw.startsWith('~/') || raw.startsWith('~\\')) {
-    return joinRemotePath(remoteHome, raw.slice(2));
-  }
-  if (raw.startsWith('/') || /^[A-Za-z]:[\\/]/.test(raw)) {
-    return raw;
-  }
-  return joinRemotePath(remoteHome, raw);
-}
-
 export function buildStartExistingScript(options: { remotePort: number; target: RemoteRuntimeTarget }) {
   const baseDir = remoteBaseDir(options.target);
   const bootstrap = remoteBootstrapPath(options.target);

@@ -1173,6 +1173,8 @@ function deriveDirsFromConfig(
   cfg: SystemConfigResult | null | undefined,
 ): DerivedDirs | null {
   const baseDirRaw = typeof cfg?.baseDir === 'string' ? cfg.baseDir : '';
+  const defaultWorkspaceRaw =
+    typeof cfg?.defaultWorkspace === 'string' ? cfg.defaultWorkspace : '';
   const hostIDRaw =
     typeof cfg?.hostID === 'string'
       ? cfg.hostID
@@ -1180,13 +1182,14 @@ function deriveDirsFromConfig(
         ? cfg.instanceID
         : '';
   const baseDir = normalizeDirPath(baseDirRaw);
+  const defaultWorkspace = normalizeDirPath(defaultWorkspaceRaw);
   const instanceID = hostIDRaw.trim();
-  if (!baseDir || !instanceID) {
+  if (!baseDir || !defaultWorkspace || !instanceID) {
     return null;
   }
   return {
     baseDir,
-    workspaceDir: joinBaseDir(baseDir, 'workspace'),
+    workspaceDir: defaultWorkspace,
     agentsDir: joinBaseDir(baseDir, 'agents'),
     instanceID,
   };
@@ -2065,6 +2068,7 @@ function createWorkspaceStore(_tabId: string): WorkspaceStore {
 
   const ensureSystemConfig = async (opts?: {
     force?: boolean;
+    attempts?: number;
   }): Promise<DerivedDirs | null> => {
     const snapshot = getState?.();
     if (!snapshot || snapshot.connectionState !== 'connected') {
@@ -2084,7 +2088,7 @@ function createWorkspaceStore(_tabId: string): WorkspaceStore {
       return pending;
     }
     const request = agentService
-      .getSystemConfig()
+      .getSystemConfig({ attempts: opts?.attempts })
       .then((cfg) => {
         const derived = deriveDirsFromConfig(cfg);
         if (derived) {
@@ -2546,7 +2550,7 @@ function createWorkspaceStore(_tabId: string): WorkspaceStore {
       },
       onConnect: () => {
         void (async () => {
-          const derived = await ensureSystemConfig({ force: true });
+          const derived = await ensureSystemConfig({ force: true, attempts: 12 });
           if (derived) {
             set({
               baseDir: derived.baseDir,

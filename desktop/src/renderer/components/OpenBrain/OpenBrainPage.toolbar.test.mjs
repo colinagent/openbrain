@@ -66,8 +66,9 @@ test('OpenBrain onboarding supports login, connect GitHub, and add source steps'
   assert.match(source, /const authInitialized = useAuthStore\(\(state\) => state\.initialized\);/);
   assert.match(source, /const readinessKnown = authInitialized && \(provider !== 'cloud' \|\| providerStatusChecked\);/);
   assert.match(source, /const needsGitHubConnection = readinessKnown && loggedIn && provider === 'cloud' && !cloudReady;/);
-  assert.match(source, /const showDemoGraph = authInitialized && \(!loggedIn \|\| needsGitHubConnection\);/);
-  assert.match(source, /const showOnboardingOverlay = readinessKnown && \(!loggedIn \|\| needsGitHubConnection \|\| sources\.length === 0\);/);
+  assert.match(source, /const showLoginGate = authInitialized && !loggedIn;/);
+  assert.match(source, /const showDemoGraph = showLoginGate \|\| needsGitHubConnection;/);
+  assert.match(source, /const showOnboardingOverlay = showLoginGate\s*\|\|\s*\(readinessKnown && \(needsGitHubConnection \|\| sources\.length === 0\)\);/);
   assert.match(source, /const graphFlowKey = /);
   assert.match(source, /disabled=\{onboardingBusy \|\| loading\}/);
   assert.match(source, /const hydrateCachedOpenBrains = useOpenBrainStore\(\(state\) => state\.hydrateCachedSources\);/);

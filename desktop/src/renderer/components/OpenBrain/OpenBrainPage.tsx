@@ -294,8 +294,11 @@ export const OpenBrainPage: React.FC<OpenBrainPageProps> = ({ onOpenWorkspace, o
 
   const readinessKnown = authInitialized && (provider !== 'cloud' || providerStatusChecked);
   const needsGitHubConnection = readinessKnown && loggedIn && provider === 'cloud' && !cloudReady;
-  const showDemoGraph = authInitialized && (!loggedIn || needsGitHubConnection);
-  const showOnboardingOverlay = readinessKnown && (!loggedIn || needsGitHubConnection || sources.length === 0);
+  const showLoginGate = authInitialized && !loggedIn;
+  const showDemoGraph = showLoginGate || needsGitHubConnection;
+  // Login gate must not wait on cloud provider status; GitHub / empty-source gates still do.
+  const showOnboardingOverlay = showLoginGate
+    || (readinessKnown && (needsGitHubConnection || sources.length === 0));
   const graphFlowKey = `openbrain-flow-${showOnboardingOverlay ? 'onboarding' : 'ready'}`;
   const onboardingStep = !loggedIn
     ? 'login'

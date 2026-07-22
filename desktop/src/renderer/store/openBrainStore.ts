@@ -1006,18 +1006,18 @@ export const useOpenBrainStore = create<OpenBrainStoreState>((set, get) => ({
         persistLoadedPublicBrains(provider, publicBrainLoad.publicBrains);
       }
       if (!loadedAny) {
+        const current = get();
+        const statusState = providerStatus
+          ? providerStatusState(providerStatus, provider)
+          : {
+            provider,
+            authRequired,
+            githubConnected: provider === 'local' || current.githubConnected,
+            cloudReady: provider === 'local' || provider === 'cloud',
+            providerStatusChecked: true,
+            githubCheckError: current.githubCheckError,
+          };
         if (publicBrainLoad.loaded) {
-          const current = get();
-          const statusState = providerStatus
-            ? providerStatusState(providerStatus, provider)
-            : {
-              provider,
-              authRequired,
-              githubConnected: provider === 'local' || current.githubConnected,
-              cloudReady: provider === 'local' || provider === 'cloud',
-              providerStatusChecked: true,
-              githubCheckError: current.githubCheckError,
-            };
           set({
             ...statusState,
             authRequired,
@@ -1035,6 +1035,16 @@ export const useOpenBrainStore = create<OpenBrainStoreState>((set, get) => ({
         };
         error.authRequired = authRequired;
         error.provider = provider;
+        // Align with refresh(): mark provider status checked so login/GitHub gates are not stuck.
+        set({
+          ...statusState,
+          authRequired,
+          sources: markRuntimeReachability(current.sources),
+          publicBrains: current.publicBrains,
+          refreshing: false,
+          error: current.sources.length === 0 ? lastError : current.error,
+          lastLoadedAt: current.lastLoadedAt,
+        });
         throw error;
       }
       const statusState = providerStatus

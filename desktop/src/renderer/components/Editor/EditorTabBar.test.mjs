@@ -60,8 +60,9 @@ test('EditorTabBar renders primary editor tabs without conversation tabs', () =>
   assert.match(source, /getEditorDocuments\(documents\)/);
   assert.doesNotMatch(source, /const tabs = documents;/);
   assert.match(source, /tabs\.map\(\(tab\) => \{/);
-  assert.match(source, /const activeVisible = tabs\.some\(\(tab\) => tab\.id === activeTabId\);/);
-  assert.match(source, /\{activeVisible && isDirty && \(/);
+  assert.doesNotMatch(source, />\s*Save\s*</);
+  assert.doesNotMatch(source, /Save \(Ctrl\+S\)/);
+  assert.doesNotMatch(source, /activeVisible && isDirty/);
 });
 
 test('EditorTabBar shows a status pin icon for the pinned editor tab', () => {

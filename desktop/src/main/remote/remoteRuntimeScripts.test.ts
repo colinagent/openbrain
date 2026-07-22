@@ -4,7 +4,6 @@ import test from 'node:test';
 import {
   buildInstallScript,
   buildStartExistingScript,
-  resolveRemoteWorkspaceDir,
   type RemoteRuntimeTarget,
 } from './remoteRuntimeScripts';
 
@@ -68,11 +67,4 @@ test('buildInstallScript uses POSIX sh without bash', () => {
   assert.doesNotMatch(command, /\bbash\b/);
   assert.match(command, /BOOTSTRAP=.*\/home\/openbrain\/\.openbrain\/bin\/openbrain-bootstrap/);
   assert.match(command, /"\$BOOTSTRAP" ensure --base-dir "\$BASE_DIR" --port 19530/);
-});
-
-test('resolveRemoteWorkspaceDir handles Windows home-relative paths', () => {
-  assert.equal(resolveRemoteWorkspaceDir(undefined, windowsTarget.home), 'C:\\Users\\Open Brain');
-  assert.equal(resolveRemoteWorkspaceDir('~\\Projects', windowsTarget.home), 'C:\\Users\\Open Brain\\Projects');
-  assert.equal(resolveRemoteWorkspaceDir('repo', windowsTarget.home), 'C:\\Users\\Open Brain\\repo');
-  assert.equal(resolveRemoteWorkspaceDir('D:\\work\\repo', windowsTarget.home), 'D:\\work\\repo');
 });

@@ -333,7 +333,6 @@ declare global {
 
   type UserSettings = {
     version: number;
-    defaultWorkspace?: string;
     recentWorkspaces?: RecentWorkspaces;
     openBrain?: {
       provider?: 'cloud' | 'local';

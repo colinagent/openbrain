@@ -1,6 +1,11 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { parse as parseJsonc, type ParseError } from 'jsonc-parser';
+import {
+  applyEdits as applyJsoncEdits,
+  modify as modifyJsonc,
+  parse as parseJsonc,
+  type ParseError,
+} from 'jsonc-parser';
 import {
   DEFAULT_UI_CHAT_THINKING_LEVEL,
   normalizeUiChatThinkingLevel,
@@ -30,7 +35,6 @@ export type IdleSleepPolicy = 'off' | 'whileAgentRunning' | 'whileAppRunning';
 
 export type SystemSettings = {
   version: number;
-  defaultDirectory?: string;
   remoteConnectionDefaults?: {
     host?: string;
     port?: number;
@@ -52,7 +56,6 @@ export type SystemSettings = {
 
 export type UserSettings = {
   version: number;
-  defaultWorkspace?: string;
   recentWorkspaces?: RecentWorkspaces;
   openBrain?: OpenBrainUserSettings;
 };
@@ -422,7 +425,6 @@ function getDefaultShell() {
 function defaultSystemSettings(): SystemSettings {
   return {
     version: 1,
-    defaultDirectory: undefined,
     remoteConnectionDefaults: undefined,
     logging: {
       enabled: false,
@@ -460,11 +462,14 @@ export function normalizeIdleSleepPolicy(power: unknown): IdleSleepPolicy {
 
 function normalizeSystemSettings(settings: unknown): SystemSettings {
   const defaults = defaultSystemSettings();
-  const raw = settings && typeof settings === 'object' ? settings as Partial<SystemSettings> : {};
+  const raw = settings && typeof settings === 'object'
+    ? settings as Partial<SystemSettings> & { defaultDirectory?: unknown }
+    : {};
+  const { defaultDirectory: _retiredDefaultDirectory, ...supportedRaw } = raw;
   const idleSleepPolicy = resolveIdleSleepPolicy(raw.power);
   return {
     ...defaults,
-    ...raw,
+    ...supportedRaw,
     logging: {
       enabled: typeof raw.logging?.enabled === 'boolean' ? raw.logging.enabled : defaults.logging!.enabled,
       level: raw.logging?.level ?? defaults.logging!.level,
@@ -482,10 +487,9 @@ export function getIdleSleepPolicy(settings: SystemSettings): IdleSleepPolicy {
   return settings.power?.idleSleepPolicy ?? 'off';
 }
 
-function defaultUserSettings(homeDir: string): UserSettings {
+function defaultUserSettings(): UserSettings {
   return {
     version: 1,
-    defaultWorkspace: path.join(homeDir, '.openbrain', 'workspace'),
     recentWorkspaces: createEmptyRecentWorkspaces(),
     openBrain: {
       provider: 'cloud',
@@ -1028,6 +1032,53 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
+function removeRetiredSettingComments(data: string, settingNames: string[]): string {
+  const eol = data.includes('\r\n') ? '\r\n' : '\n';
+  return data
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      return !(
+        trimmed.startsWith('//')
+        && settingNames.some((name) => trimmed.includes(name))
+      );
+    })
+    .join(eol);
+}
+
+async function removeRetiredSetting(filePath: string, settingName: string): Promise<void> {
+  let data: string;
+  try {
+    data = await fs.readFile(filePath, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+  const parsed = parseSettingsJson<Record<string, unknown>>(data);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return;
+  }
+  const edits = Object.hasOwn(parsed, settingName)
+    ? modifyJsonc(data, [settingName], undefined, {
+        formattingOptions: { insertSpaces: true, tabSize: 2, eol: data.includes('\r\n') ? '\r\n' : '\n' },
+      })
+    : [];
+  const withoutSetting = applyJsoncEdits(data, edits);
+  const migrated = removeRetiredSettingComments(withoutSetting, [settingName]);
+  if (migrated !== data) {
+    await fs.writeFile(filePath, migrated, 'utf8');
+  }
+}
+
+async function migrateRetiredWorkspaceSettings(settingsRoot: string): Promise<void> {
+  await Promise.all([
+    removeRetiredSetting(getUserSettingsPath(settingsRoot), 'defaultWorkspace'),
+    removeRetiredSetting(getSystemSettingsPath(settingsRoot), 'defaultDirectory'),
+  ]);
+}
+
 export async function ensureSettingsInitialized(homeDir: string): Promise<void> {
   const settingsRoot = getSettingsRoot(homeDir);
   const stateDir = path.dirname(getTerminalLayoutPath(settingsRoot));
@@ -1047,7 +1098,7 @@ export async function ensureSettingsInitialized(homeDir: string): Promise<void> 
 
   const defaults: Array<[string, () => unknown]> = [
     [getSystemSettingsPath(settingsRoot), defaultSystemSettings],
-    [getUserSettingsPath(settingsRoot), () => defaultUserSettings(homeDir)],
+    [getUserSettingsPath(settingsRoot), defaultUserSettings],
     [getUiSettingsPath(settingsRoot), defaultUiSettings],
     [getEditorSettingsPath(settingsRoot), defaultEditorSettings],
     [getTerminalSettingsPath(settingsRoot), defaultTerminalConfig],
@@ -1063,6 +1114,7 @@ export async function ensureSettingsInitialized(homeDir: string): Promise<void> 
       }
     })
   );
+  await migrateRetiredWorkspaceSettings(settingsRoot);
 }
 
 // ============================================================================
@@ -1083,25 +1135,21 @@ export async function loadSystemSettings(settingsRoot: string): Promise<SystemSe
   }
 }
 
-export async function loadUserSettings(
-  settingsRoot: string,
-  homeDir: string
-): Promise<UserSettings> {
+export async function loadUserSettings(settingsRoot: string): Promise<UserSettings> {
   const filePath = getUserSettingsPath(settingsRoot);
   try {
     const data = await readSettingsFile(filePath);
     const parsed = parseSettingsJson<UserSettings>(data);
     if (!parsed || typeof parsed.version !== 'number') {
-      return defaultUserSettings(homeDir);
+      return defaultUserSettings();
     }
     return {
-      ...defaultUserSettings(homeDir),
-      ...parsed,
+      version: parsed.version,
       recentWorkspaces: normalizeRecentWorkspaces(parsed.recentWorkspaces),
       openBrain: normalizeOpenBrainUserSettings(parsed.openBrain),
     };
   } catch {
-    return defaultUserSettings(homeDir);
+    return defaultUserSettings();
   }
 }
 
@@ -1300,7 +1348,7 @@ export async function loadAllSettings(homeDir: string): Promise<SettingsState> {
   const settingsRoot = getSettingsRoot(homeDir);
   const [system, user, ui, editor, keybindings, theme, markdownThemes, codeThemes] = await Promise.all([
     loadSystemSettings(settingsRoot),
-    loadUserSettings(settingsRoot, homeDir),
+    loadUserSettings(settingsRoot),
     loadUiSettings(settingsRoot),
     loadEditorSettings(settingsRoot),
     loadKeybindings(settingsRoot),
@@ -1339,12 +1387,15 @@ export async function saveSettings(
       : current.system,
     user: patch.user
       ? {
-          ...current.user,
-          ...patch.user,
+          version: patch.user.version ?? current.user.version,
           recentWorkspaces: normalizeRecentWorkspaces(patch.user.recentWorkspaces || current.user.recentWorkspaces),
           openBrain: normalizeOpenBrainUserSettings(patch.user.openBrain || current.user.openBrain),
         }
-      : current.user,
+      : {
+          version: current.user.version,
+          recentWorkspaces: normalizeRecentWorkspaces(current.user.recentWorkspaces),
+          openBrain: normalizeOpenBrainUserSettings(current.user.openBrain),
+        },
     ui: patch.ui ? normalizeUiSettings({ ...current.ui, ...patch.ui }) : current.ui,
     editor: patch.editor
       ? {

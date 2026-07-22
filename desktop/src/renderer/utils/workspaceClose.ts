@@ -2,7 +2,6 @@ import type { WorkspaceTab } from '../store/tabManagerStore';
 
 type WorkspacePathAPI = {
   getDefaultDir?: () => Promise<string>;
-  getHomeDir?: () => Promise<string>;
 };
 
 type ReplacementWorkspaceStoreState = {
@@ -17,7 +16,7 @@ type ReplacementWorkspaceStore = {
 
 type CloseWorkspaceTabDeps = {
   workspaceTabs: WorkspaceTab[];
-  createWorkspaceTab: (init: { kind: 'local'; workspacePath: string }) => WorkspaceTab;
+  createWorkspaceTab: (init: { kind: 'local'; workspacePath?: string }) => WorkspaceTab;
   getWorkspaceStore: (tabId: string) => ReplacementWorkspaceStore;
   disconnectRemote: (tabId: string) => Promise<void>;
   setWorkspaceActive: (tabId: string, active: boolean) => void;
@@ -36,27 +35,11 @@ function normalizeNonEmptyString(value: string | null | undefined): string | nul
 export async function resolveDefaultLocalWorkspacePath(
   electronAPI: WorkspacePathAPI | undefined = globalThis.window?.electronAPI,
 ): Promise<string> {
-  let homeDir: string | null = null;
-  try {
-    homeDir = normalizeNonEmptyString(await electronAPI?.getHomeDir?.());
-  } catch {
-    homeDir = null;
+  const defaultDir = normalizeNonEmptyString(await electronAPI?.getDefaultDir?.());
+  if (defaultDir) {
+    return defaultDir;
   }
-
-  try {
-    const defaultDir = normalizeNonEmptyString(await electronAPI?.getDefaultDir?.());
-    if (defaultDir) {
-      return defaultDir;
-    }
-  } catch {
-    // Fall through to the home workspace fallback.
-  }
-
-  if (homeDir) {
-    return `${homeDir}/.openbrain/workspace`;
-  }
-
-  return '/';
+  throw new Error('Runtime did not provide a default workspace');
 }
 
 export async function closeWorkspaceTabWithDefaultFallback(
@@ -69,16 +52,23 @@ export async function closeWorkspaceTabWithDefaultFallback(
   deps.disposeChatWorkspaceRuntime(tabId);
 
   if (shouldReplaceClosingTab) {
-    const nextWorkspacePath = await (deps.resolveDefaultLocalWorkspacePath
-      ? deps.resolveDefaultLocalWorkspacePath()
-      : resolveDefaultLocalWorkspacePath());
+    let nextWorkspacePath: string | undefined;
+    try {
+      nextWorkspacePath = await (deps.resolveDefaultLocalWorkspacePath
+        ? deps.resolveDefaultLocalWorkspacePath()
+        : resolveDefaultLocalWorkspacePath());
+    } catch {
+      nextWorkspacePath = undefined;
+    }
     const nextTab = deps.createWorkspaceTab({
       kind: 'local',
       workspacePath: nextWorkspacePath,
     });
     const nextStore = deps.getWorkspaceStore(nextTab.id).getState();
     nextStore.connect();
-    nextStore.setCurrentDir(nextWorkspacePath);
+    if (nextWorkspacePath) {
+      nextStore.setCurrentDir(nextWorkspacePath);
+    }
   }
 
   try {

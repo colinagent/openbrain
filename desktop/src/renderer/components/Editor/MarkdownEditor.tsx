@@ -41,6 +41,8 @@ import { findPendingReviewOverlayForFile } from '../../utils/reviewOverlay';
 import { formatReviewActionError } from '../../utils/reviewMessages';
 import { getAddToChatShortcutLabel, resolveSelectionHintPosition } from './selectionHintPosition';
 import { cancelInlineCompletion, isInlineCompletionEnabledForPath, requestInlineCompletion } from './resolveInlineCompletion';
+import { getMarkdownDocumentTitle } from '../../utils/documentHeader';
+import type { DocumentHeaderOptions } from '../../utils/documentHeaderState';
 
 const VIEW_STATE_CACHE_LIMIT = 200;
 const TEXT_OFFSET_HOVER_DELAY_MS = 1000;
@@ -349,6 +351,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     reloadOpenTabsByPaths,
     setCurrentReviewOverlay,
     requestEditorRandomID,
+    statPath,
   } = appState;
   const openDocuments = documents;
   const boundTab = tabId ? openDocuments.find((tab) => tab.id === tabId) || null : null;
@@ -372,6 +375,13 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const activeTab = isBoundToTab ? boundTab : openDocuments.find((tab) => tab.id === activeTabId);
   const activeTabTitle = activeTab?.title || '';
   const isConversationMarkdown = activeTab?.documentRole === 'conversation';
+  const showDocumentHeader = isDotMd && !compact && !isConversationMarkdown;
+  const [fileModTime, setFileModTime] = useState<number | null>(null);
+  const documentHeaderOptions: DocumentHeaderOptions = {
+    enabled: showDocumentHeader,
+    title: showDocumentHeader && currentFilePath ? getMarkdownDocumentTitle(currentFilePath) : '',
+    modTime: fileModTime,
+  };
   const autoReviewOverlay = findPendingReviewOverlayForFile(selectedThreadReviews, currentFilePath);
   const reviewOverlay: ReviewOverlay | null = currentReviewOverlay?.filePath === currentFilePath
     ? currentReviewOverlay
@@ -388,6 +398,39 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   ));
   const consumeChatScrollToBottom = useChatWorkspaceStore((state) => state.consumeChatScrollToBottom);
   const addToChatShortcutLabel = getAddToChatShortcutLabel();
+
+  const refreshFileModTime = useCallback(async (path: string | null | undefined) => {
+    const normalizedPath = (path || '').trim();
+    if (!normalizedPath) {
+      setFileModTime(null);
+      return;
+    }
+    try {
+      const stat = await statPath(normalizedPath);
+      if (stat.error || typeof stat.modTime !== 'number' || !Number.isFinite(stat.modTime)) {
+        setFileModTime(null);
+        return;
+      }
+      setFileModTime(stat.modTime);
+    } catch {
+      setFileModTime(null);
+    }
+  }, [statPath]);
+
+  useEffect(() => {
+    if (!showDocumentHeader || !currentFilePath) {
+      setFileModTime(null);
+      return;
+    }
+    void refreshFileModTime(currentFilePath);
+  }, [currentFilePath, refreshFileModTime, showDocumentHeader]);
+
+  useEffect(() => {
+    if (!showDocumentHeader || !currentFilePath || isDirty) {
+      return;
+    }
+    void refreshFileModTime(currentFilePath);
+  }, [currentFilePath, isDirty, refreshFileModTime, showDocumentHeader]);
 
   const handleReviewOverlayDecision = useCallback(async (decision: ReviewOverlayDecision, overlay: ReviewOverlay) => {
     if (reviewActionBusyRef.current) {
@@ -886,6 +929,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       onOpenSearchPanel: ({ replace }) => {
         searchOverlayRef.current?.open({ replace });
       },
+      documentHeader: documentHeaderOptions,
     });
     const activeIdentity = (currentFileURI || currentFilePath || '').trim();
     if (activeIdentity) {
@@ -953,6 +997,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   useEffect(() => {
     editorRef.current?.setReadOnly(shouldFollowStreaming);
   }, [shouldFollowStreaming]);
+
+  useEffect(() => {
+    editorRef.current?.setDocumentHeader(documentHeaderOptions);
+  }, [documentHeaderOptions.enabled, documentHeaderOptions.modTime, documentHeaderOptions.title]);
 
   useEffect(() => {
     if (!activeChatPath || !shouldScrollChatToBottom || !editorRef.current) {

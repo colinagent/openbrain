@@ -27,8 +27,9 @@ npm run dist:mac
 
 For signed macOS releases, provide a valid Developer ID Application identity
 and Apple notarization credentials through the standard electron-builder/macOS
-environment variables. `OPENBRAIN_DESKTOP_UPDATE_URL` can override the updater
-feed for local testing.
+environment variables. Desktop auto-update reads the public feed at
+`https://download.op-agent.com/desktop/latest` by default.
+`OPENBRAIN_DESKTOP_UPDATE_URL` can override the updater feed for local testing.
 
 ## Runtime Bundle Input
 

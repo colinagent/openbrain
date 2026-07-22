@@ -41,7 +41,6 @@ import {
   SettingsState,
   getSettingsRoot,
   ensureSettingsInitialized,
-  loadUserSettings,
   migrateUiThemeIdsOnBuiltInUpgrade,
   DEPRECATED_THEME_IDS,
   getLegacyVersionSettingsPath,
@@ -53,6 +52,7 @@ import {
   getIdleSleepPolicy,
 } from './settings/settingsStore';
 import { AgentSleepInhibitorController } from './agentSleepInhibitor';
+import { waitForRuntimeSystemConfig } from './runtimeSystemConfig';
 import {
   loadAuthConfig,
   saveAuthConfig,
@@ -235,8 +235,6 @@ const pendingWindowCloseRequests = new Set<number>();
 const approvedWindowCloses = new Set<number>();
 const desktopUpdateInstallCoordinator = new DesktopUpdateInstallCoordinator();
 let settingsCache: SettingsState | null = null;
-let defaultWorkspacePathCache: string | null = null;
-let defaultWorkspacePathPromise: Promise<string> | null = null;
 let settingsWatcher: FSWatcher | null = null;
 let settingsWatchDebounce: NodeJS.Timeout | null = null;
 let workspaceTabsSessionCache: WorkspaceTabsSessionStore | null = null;
@@ -644,7 +642,7 @@ function ensureArchiveCleanupScheduler() {
         })),
         sessionsById: (cache?.sessions || {}) as Record<string, ArchiveWorkspaceTabsSessionState | null | undefined>,
         getRemoteSession: (windowId, tabId) => getRemoteStatus(windowId, tabId),
-        localWsUrl: LOCAL_ARCHIVE_CLEANUP_WS_URL,
+        localWsUrl: LOCAL_RUNTIME_WS_URL,
       });
     },
   });
@@ -856,7 +854,7 @@ const PDF_EXPORT_READY_TIMEOUT_MS = 30_000;
 // (VS Code uses DEFAULT_CUSTOM_TITLEBAR_HEIGHT = 35)
 const CUSTOM_TITLEBAR_HEIGHT = 35;
 const LOCAL_OPENBRAIN_SERVER_PORT = 19530;
-const LOCAL_ARCHIVE_CLEANUP_WS_URL = `ws://127.0.0.1:${LOCAL_OPENBRAIN_SERVER_PORT}/ws`;
+const LOCAL_RUNTIME_WS_URL = `ws://127.0.0.1:${LOCAL_OPENBRAIN_SERVER_PORT}/ws`;
 
 type AppIconFormat = 'png' | 'icns';
 
@@ -1678,49 +1676,18 @@ async function getSettingsTemplateDir(): Promise<string | null> {
   return null;
 }
 
-function normalizeWorkspacePath(value: string | undefined, homeDir: string): string | null {
-  if (!value) {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  if (trimmed === '~') {
-    return homeDir;
-  }
-  if (trimmed.startsWith('~/')) {
-    return path.join(homeDir, trimmed.slice(2));
-  }
-  if (path.isAbsolute(trimmed)) {
-    return trimmed;
-  }
-  return path.resolve(homeDir, trimmed);
-}
-
 async function ensureLocalWorkspaceDir(workspacePath: string): Promise<string> {
   await fs.mkdir(workspacePath, { recursive: true });
   return workspacePath;
 }
 
-async function resolveDefaultWorkspacePath(homeDir: string): Promise<string> {
-  if (defaultWorkspacePathCache) {
-    return defaultWorkspacePathCache;
-  }
-  if (defaultWorkspacePathPromise) {
-    return defaultWorkspacePathPromise;
-  }
-  defaultWorkspacePathPromise = (async () => {
-    await ensureSettingsInitialized(homeDir);
-    const settingsRoot = getSettingsRoot(homeDir);
-    const userSettings = await loadUserSettings(settingsRoot, homeDir);
-    const normalized = normalizeWorkspacePath(userSettings.defaultWorkspace, homeDir);
-    const resolved = normalized || path.join(homeDir, '.openbrain', 'workspace');
-    await ensureLocalWorkspaceDir(resolved);
-    defaultWorkspacePathCache = resolved;
-    return resolved;
-  })();
-  return defaultWorkspacePathPromise;
+async function resolveDefaultWorkspacePath(): Promise<string> {
+  const systemConfig = await waitForRuntimeSystemConfig(LOCAL_RUNTIME_WS_URL, {
+    attempts: 12,
+    intervalMs: 250,
+    requestTimeoutMs: 750,
+  });
+  return systemConfig.defaultWorkspace;
 }
 
 async function copyMissingFromTemplate(templateDir: string, targetDir: string): Promise<void> {
@@ -2285,8 +2252,13 @@ async function createPrimaryWindow(homeDir: string): Promise<BrowserWindow> {
     });
   }
 
-  const workspacePath = await resolveDefaultWorkspacePath(homeDir);
-  return createWindow({ mode: 'local', workspacePath });
+  try {
+    const workspacePath = await resolveDefaultWorkspacePath();
+    return createWindow({ mode: 'local', workspacePath });
+  } catch {
+    // The renderer will resolve the Runtime-owned workspace after connecting.
+    return createWindow({ mode: 'local' });
+  }
 }
 
 async function focusOrCreatePrimaryWindow() {
@@ -3025,15 +2997,6 @@ ipcMain.handle('workspace:createFromTemplate', async (_event, input?: { template
     try {
       const auth = await loadAuthConfig(homeDir);
       const materialized = await createLocalEmptyWorkspace(homeDir, { name: input?.name, localPath }, auth);
-      defaultWorkspacePathCache = materialized.path;
-      defaultWorkspacePathPromise = null;
-      const currentSettings = await ensureSettings();
-      await saveSettings(homeDir, {
-        user: {
-          ...currentSettings.user,
-          defaultWorkspace: materialized.path,
-        },
-      });
       return { success: true, workspace: materialized };
     } catch (err) {
       return { success: false, error: (err as Error).message || 'Failed to create local workspace.' };
@@ -3043,15 +3006,6 @@ ipcMain.handle('workspace:createFromTemplate', async (_event, input?: { template
     try {
       const auth = await loadAuthConfig(homeDir);
       const materialized = await createLocalIndexWorkspace(homeDir, { name: input?.name, localPath }, auth);
-      defaultWorkspacePathCache = materialized.path;
-      defaultWorkspacePathPromise = null;
-      const currentSettings = await ensureSettings();
-      await saveSettings(homeDir, {
-        user: {
-          ...currentSettings.user,
-          defaultWorkspace: materialized.path,
-        },
-      });
       return { success: true, workspace: materialized };
     } catch (err) {
       return { success: false, error: (err as Error).message || 'Failed to create local workspace.' };
@@ -3082,15 +3036,6 @@ ipcMain.handle('workspace:createFromTemplate', async (_event, input?: { template
     const materialized = await materializeWorkspace(homeDir, created, auth, {
       localPath,
       writeManifest: input?.templateID !== 'openbrain-cloud',
-    });
-    defaultWorkspacePathCache = materialized.path;
-    defaultWorkspacePathPromise = null;
-    const currentSettings = await ensureSettings();
-    await saveSettings(homeDir, {
-      user: {
-        ...currentSettings.user,
-        defaultWorkspace: materialized.path,
-      },
     });
     return { success: true, workspace: materialized };
   } catch (err) {
@@ -3130,8 +3075,7 @@ ipcMain.handle('app:getHomeDir', async () => {
 
 // Get default openbrain directory
 ipcMain.handle('app:getDefaultDir', async () => {
-  const homeDir = app.getPath('home');
-  return resolveDefaultWorkspacePath(homeDir);
+  return resolveDefaultWorkspacePath();
 });
 
 function normalizeLocalPickerPath(targetPath: unknown): string | null {
@@ -3153,7 +3097,7 @@ async function safeGetAppDirectory(name: Parameters<typeof app.getPath>[0]): Pro
 
 ipcMain.handle('app:getLocalSpecialDirectories', async () => {
   const homeDir = app.getPath('home');
-  const defaultDir = await resolveDefaultWorkspacePath(homeDir);
+  const defaultDir = await resolveDefaultWorkspacePath();
   const desktopDir = await safeGetAppDirectory('desktop');
   const downloadsDir = await safeGetAppDirectory('downloads');
   const rootDir = path.parse(homeDir).root || path.parse(defaultDir).root || '/';
@@ -3453,7 +3397,7 @@ ipcMain.handle('remote:connectSsh', async (event, params: { host: SshHost; tabId
     throw new Error('Window not found');
   }
   const host = await resolveSshHostForConnect(app.getPath('home'), params.host);
-  // Remote defaultWorkspace is controlled by the openbrain-server machine, not openbrain.
+  // The connected Runtime returns its own defaultWorkspace through config/system/get.
   const session = await connectSsh(record.info.id, params.tabId, host);
   // Do not block the UI on config sync. Best-effort push in background.
   syncAllToTarget({ force: true }).catch((err) => {

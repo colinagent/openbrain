@@ -60,6 +60,33 @@
     "idleSleepWhileAppRunningHint": "Keep the system awake for the whole app session so local server and runtime stay available. The display can still lock. Useful when using OpenBrain as a hub for remote surfaces.",
     "saved": "Desktop settings saved.",
     "loadFailed": "Failed to load desktop settings",
-    "saveFailed": "Failed to save desktop settings"
+    "saveFailed": "Failed to save desktop settings",
+    "remote": {
+      "title": "Remote Access",
+      "loadFailed": "Failed to load Remote Access",
+      "unavailable": "Remote Access is disabled by this build or its global kill switch.",
+      "enable": "Enable",
+      "disable": "Disable",
+      "confirmHint": "Your computer will keep an outbound encrypted connection to the selected region while OpenBrain is running.",
+      "confirmLabel": "I understand that paired devices can access the capabilities shown by OpenBrain.",
+      "confirmEnable": "Enable Remote Access",
+      "computer": "Computer",
+      "region": "Available region",
+      "switchRegion": "Switch",
+      "pairDevice": "Pair a device",
+      "createCode": "Create code",
+      "newCode": "New code",
+      "qrAlt": "OpenBrain pairing QR code",
+      "shortCode": "Short code",
+      "copyCode": "Copy pairing code",
+      "expiresAt": "Expires at {{value}}",
+      "devices": "Paired devices",
+      "refreshDevices": "Refresh paired devices",
+      "noDevices": "No paired devices.",
+      "lastSeen": "Last seen {{value}}",
+      "neverSeen": "Not connected yet",
+      "revoke": "Revoke device",
+      "state": { "off": "Off", "connecting": "Connecting", "online": "Online", "reconnecting": "Reconnecting" }
+    }
   }
 }

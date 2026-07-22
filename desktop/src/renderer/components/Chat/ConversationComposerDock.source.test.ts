@@ -174,6 +174,14 @@ test('ConversationComposerDock treats the agent picker as a per-conversation sel
   assert.doesNotMatch(conversationComposerDockSource, /selectedThreadMeta\?\.agentID/);
 });
 
+test('ConversationComposerDock re-resolves agent display names when the node graph refreshes', () => {
+  assert.match(
+    conversationComposerDockSource,
+    /const resolvedAgent = useMemo\([\s\S]*?\[effectiveTarget\?\.agentID, nodeGraphRevision, resolveAgentByID\]/,
+  );
+  assert.match(conversationComposerDockSource, /storedName && storedName !== effectiveAgentID/);
+});
+
 test('ConversationComposerDock inserts source references with a single trailing newline', () => {
   assert.match(
     conversationComposerDockSource,

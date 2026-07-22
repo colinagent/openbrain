@@ -17,5 +17,9 @@
   "updating": "Updating…",
   "unknown": "unknown",
   "untitled": "Untitled",
-  "settings": "Settings"
+  "settings": "Settings",
+  "documentModifiedToday": "Modified today",
+  "documentModifiedYesterday": "Modified yesterday",
+  "documentModifiedDaysAgo": "Modified {{count}} days ago",
+  "documentModifiedOn": "Modified on {{date}}"
 }

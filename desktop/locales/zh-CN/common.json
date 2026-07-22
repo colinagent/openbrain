@@ -17,5 +17,9 @@
   "updating": "更新中…",
   "unknown": "未知",
   "untitled": "未命名",
-  "settings": "设置"
+  "settings": "设置",
+  "documentModifiedToday": "今天修改",
+  "documentModifiedYesterday": "昨天修改",
+  "documentModifiedDaysAgo": "{{count}} 天前修改",
+  "documentModifiedOn": "{{date}} 修改"
 }

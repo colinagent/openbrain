@@ -710,7 +710,7 @@ export function ConversationComposerDock({
   ), [agentCwd, getChatAgentForCwd, agentID, agentName, currentDir, selectedAgentTarget, targetChatPath]);
   const resolvedAgent = useMemo(
     () => (effectiveTarget?.agentID ? resolveAgentByID(effectiveTarget.agentID) : null),
-    [effectiveTarget?.agentID, resolveAgentByID]
+    [effectiveTarget?.agentID, nodeGraphRevision, resolveAgentByID]
   );
   const effectiveAgentID = effectiveTarget?.agentID ?? null;
   const effectiveAgentName = effectiveTarget?.agentName ?? null;
@@ -1816,8 +1816,15 @@ export function ConversationComposerDock({
   ]);
 
   const agentLabel = useMemo(() => {
-    const label = (resolvedAgent?.name || effectiveAgentName || effectiveAgentID || '').trim();
-    return label;
+    const indexedName = (resolvedAgent?.name || '').trim();
+    if (indexedName) {
+      return indexedName;
+    }
+    const storedName = (effectiveAgentName || '').trim();
+    if (storedName && storedName !== effectiveAgentID) {
+      return storedName;
+    }
+    return (effectiveAgentID || '').trim();
   }, [effectiveAgentID, effectiveAgentName, resolvedAgent?.name]);
   const agentDisplayLabel = useMemo(
     () => formatAgentTargetDisplayLabel(agentSwitchTargetDir, agentLabel),

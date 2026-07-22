@@ -31,6 +31,14 @@ import {
   reconfigureFrontmatterPanelOptions,
   refreshFrontmatterPanel,
 } from './frontmatterPanelPlugin';
+import {
+  createDocumentHeaderOptionsCompartment,
+  documentHeaderOptionsExtension,
+  reconfigureDocumentHeaderOptions,
+  refreshDocumentHeader,
+  type DocumentHeaderOptions,
+} from '../../../utils/documentHeaderState';
+import { documentHeaderPlugin } from './documentHeaderPlugin';
 import { getMarkdownDocumentPath, markdownDocumentPathFacet } from './documentPathState';
 import { markdownEditorTheme } from './theme';
 import { editorSyntaxHighlighter } from './highlight';
@@ -674,6 +682,11 @@ export interface MarkdownEditorInstance {
   setFooterWidgetExtension(extension: Extension | null): void;
 
   /**
+   * Update the document header (title / modified time).
+   */
+  setDocumentHeader(options: DocumentHeaderOptions): void;
+
+  /**
    * Destroy the editor instance.
    */
   destroy(): void;
@@ -766,6 +779,11 @@ export interface MarkdownEditorOptions {
    * Setting this disables the default CodeMirror search panel binding.
    */
   onOpenSearchPanel?: (options: { replace: boolean }) => void;
+
+  /**
+   * Feishu-style document header above frontmatter and body.
+   */
+  documentHeader?: DocumentHeaderOptions;
 }
 
 export interface MarkdownEditorViewState {
@@ -800,12 +818,14 @@ export function createMarkdownEditor(
     reviewActions = null,
     completion = null,
     onOpenSearchPanel,
+    documentHeader = { enabled: false, title: '', modTime: null },
   } = options;
 
   let isUpdatingFromExternal = false;
   const readOnlyCompartment = new Compartment();
   const footerWidgetCompartment = new Compartment();
   const frontmatterPanelOptionsCompartment = createFrontmatterPanelOptionsCompartment();
+  const documentHeaderOptionsCompartment = createDocumentHeaderOptionsCompartment();
 
   // Build extensions
   const extensions: Extension[] = [
@@ -920,12 +940,19 @@ export function createMarkdownEditor(
     ...markdownEditorTheme,
     editorMouseWheelZoom(),
     frontmatterDecorations(),
+    documentHeaderOptionsCompartment.of(documentHeaderOptionsExtension(documentHeader)),
+    ...(!exportMode ? [documentHeaderPlugin()] : []),
     frontmatterPanelOptionsCompartment.of(frontmatterPanelOptionsExtension({ readOnly, exportMode })),
     ...(!exportMode ? [frontmatterPanelPlugin()] : []),
     ...reviewOverlayExtensions(),
     ...(!readOnly && completion ? [inlineCompletion(completion)] : []),
     // Markdown-only: content width limit + line wrapping (other editors use full width, no wrap)
-    EditorView.theme({ '.cm-content': { maxWidth: 'var(--op-md-content-max-width)' } }),
+    EditorView.theme({
+      '.cm-content': {
+        width: 'min(100%, var(--op-md-content-max-width))',
+        maxWidth: 'var(--op-md-content-max-width)',
+      },
+    }),
 
     // Live Preview plugins (conditionally enabled)
     ...(livePreview ? [
@@ -1268,6 +1295,14 @@ export function createMarkdownEditor(
         effects: footerWidgetCompartment.reconfigure(extension ? [extension] : []),
         annotations: Transaction.addToHistory.of(false),
       });
+    },
+
+    setDocumentHeader(nextDocumentHeader: DocumentHeaderOptions): void {
+      view.dispatch({
+        effects: reconfigureDocumentHeaderOptions(documentHeaderOptionsCompartment, nextDocumentHeader),
+        annotations: Transaction.addToHistory.of(false),
+      });
+      refreshDocumentHeader(view);
     },
 
     destroy(): void {
