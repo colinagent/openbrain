@@ -33,6 +33,14 @@ type SystemConfig struct {
 	ModelIDs      []string            `json:"models,omitempty" mapstructure:"models"` // model ids
 }
 
+// SystemConfigResult is the read-only runtime view returned by config/system/get.
+// DefaultWorkspace is derived by the runtime from BaseDir; it is not a startup
+// configuration field.
+type SystemConfigResult struct {
+	SystemConfig
+	DefaultWorkspace string `json:"defaultWorkspace"`
+}
+
 type UserConfig struct {
 	DefaultModelKey string            `json:"defaultModelKey,omitempty" mapstructure:"defaultModelKey"`
 	Strategies      *ModelStrategies  `json:"strategies,omitempty" mapstructure:"strategies"`

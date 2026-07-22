@@ -1,0 +1,18 @@
+{
+  "protocolVersion": 1,
+  "type": "response",
+  "clientID": "client-ios-01JZ8M3Y7Z8D6N5V4C3B2A1Q0P",
+  "streamID": "stream-thread-01JZ8M56F7G8H9J0K1L2M3N4P5",
+  "seqID": 44,
+  "requestID": "request-01JZ8M89Q8W9E0R1T2Y3U4I5O6",
+  "error": {
+    "code": "resync_required",
+    "message": "the retained replay window no longer contains this cursor",
+    "retryable": true,
+    "details": {
+      "streamID": "stream-thread-01JZ8M56F7G8H9J0K1L2M3N4P5",
+      "snapshotOperation": "thread.snapshot",
+      "latestRevision": "revision-42"
+    }
+  }
+}
