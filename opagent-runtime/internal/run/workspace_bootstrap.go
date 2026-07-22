@@ -10,6 +10,7 @@ import (
 
 	"github.com/colinagent/openbrain/opagent-protocol/go-sdk/op"
 	"github.com/colinagent/openbrain/opagent-runtime/internal/nodeindex"
+	"github.com/colinagent/openbrain/opagent-runtime/packages/agentctx"
 )
 
 const workspaceBootstrapStateVersion = 2
@@ -49,6 +50,20 @@ type workspaceSeed struct {
 	AgentID string
 }
 
+func ensureDefaultConversationWorkspace(cfg *op.SystemConfig) (string, error) {
+	if cfg == nil {
+		return "", fmt.Errorf("system config is required")
+	}
+	workspaceRoot := agentctx.DefaultConversationWorkdir(cfg.BaseDir)
+	if strings.TrimSpace(workspaceRoot) == "" {
+		return "", fmt.Errorf("system default workspace is required")
+	}
+	if err := os.MkdirAll(workspaceRoot, 0o755); err != nil {
+		return "", fmt.Errorf("create system default workspace: %w", err)
+	}
+	return workspaceRoot, nil
+}
+
 func ensureCanonicalWorkspaceBootstrap(cfg *op.SystemConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("system config is required")
@@ -57,7 +72,7 @@ func ensureCanonicalWorkspaceBootstrap(cfg *op.SystemConfig) error {
 	if baseDir == "" {
 		return fmt.Errorf("system baseDir is required")
 	}
-	workspaceRoot := filepath.Join(baseDir, "workspace")
+	workspaceRoot := agentctx.DefaultConversationWorkdir(baseDir)
 	state, err := loadCanonicalWorkspaceBootstrapState(baseDir)
 	if err != nil {
 		return err

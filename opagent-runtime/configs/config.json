@@ -13,7 +13,7 @@
   },
   "runtimeUpdate": {
     "enabled": true,
-    "manifestURL": "https://github.com/colinagent/openbrain/releases/latest/download/runtime-manifest.json",
+    "manifestURL": "https://download.op-agent.com/runtime/latest/manifest.json",
     "checkInterval": "30m",
     "checkTimeout": "8s",
     "idleGracePeriod": "15s",

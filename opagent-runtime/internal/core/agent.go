@@ -61,7 +61,10 @@ func NewAgent(ctx context.Context, node *op.OpNode, meta op.Meta) (*Agent, error
 			return nil, err
 		}
 	}
-	sysprompt = expandAgentPromptVariables(sysprompt, node)
+	sysprompt, err := expandAgentPromptVariables(sysprompt, node, meta)
+	if err != nil {
+		return nil, err
+	}
 
 	toolSpecs := assembleTools(ctx, agentMeta)
 	if isThreadSubmitCapableAgent(node) {
@@ -235,17 +238,22 @@ func appendSubagentsAppendix(basePrompt string, subagents []op.OpNode) string {
 	return b.String()
 }
 
-func expandAgentPromptVariables(prompt string, node *op.OpNode) string {
-	return agentprompt.ExpandVariables(prompt, agentPromptVariables(node))
+func expandAgentPromptVariables(prompt string, node *op.OpNode, meta op.Meta) (string, error) {
+	cwd := strings.TrimSpace(metaString(meta, "cwd"))
+	if strings.Contains(prompt, "${cwd}") && cwd == "" {
+		return "", fmt.Errorf("prompt requires meta.cwd")
+	}
+	return agentprompt.ExpandVariables(prompt, agentPromptVariables(node, cwd)), nil
 }
 
-func agentPromptVariables(node *op.OpNode) agentprompt.Variables {
+func agentPromptVariables(node *op.OpNode, cwd string) agentprompt.Variables {
 	if node == nil {
-		return agentprompt.Variables{}
+		return agentprompt.Variables{CWD: strings.TrimSpace(cwd)}
 	}
 	return agentprompt.Variables{
 		AgentRoot: agentRootFromURI(node.URI),
 		AgentHome: agentHomeFromURI(node.URI),
+		CWD:       strings.TrimSpace(cwd),
 	}
 }
 

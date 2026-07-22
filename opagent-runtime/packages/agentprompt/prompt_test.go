@@ -23,10 +23,10 @@ func TestExpandPlatformVariables(t *testing.T) {
 
 func TestExpandVariablesIncludesAgentPaths(t *testing.T) {
 	got := ExpandVariables(
-		"${platform} ${agentRoot} ${agentHome}",
-		Variables{Platform: "linux", AgentRoot: "/tmp/agent", AgentHome: "/tmp/agent/.agent"},
+		"${platform} ${agentRoot} ${agentHome} ${cwd}",
+		Variables{Platform: "linux", AgentRoot: "/tmp/agent", AgentHome: "/tmp/agent/.agent", CWD: "/tmp/workspace"},
 	)
-	want := "linux /tmp/agent /tmp/agent/.agent"
+	want := "linux /tmp/agent /tmp/agent/.agent /tmp/workspace"
 	if got != want {
 		t.Fatalf("ExpandVariables() = %q, want %q", got, want)
 	}

@@ -274,7 +274,7 @@ func loadSimpleCompletionAgentPrompt(ctx context.Context, node *op.OpNode, meta 
 		}
 		prompt = loaded
 	}
-	return expandAgentPromptVariables(prompt, node), nil
+	return expandAgentPromptVariables(prompt, node, meta)
 }
 
 func buildEditorCompletionUserPrompt(params op.EditorCompletionRequest) string {

@@ -50,6 +50,7 @@ type Variables struct {
 	Platform  string
 	AgentRoot string
 	AgentHome string
+	CWD       string
 }
 
 func ExpandVariables(prompt string, vars Variables) string {
@@ -64,6 +65,7 @@ func ExpandVariables(prompt string, vars Variables) string {
 		"${platform}":  platform,
 		"${agentRoot}": strings.TrimSpace(vars.AgentRoot),
 		"${agentHome}": strings.TrimSpace(vars.AgentHome),
+		"${cwd}":       strings.TrimSpace(vars.CWD),
 	}
 	result := prompt
 	for key, value := range replacements {
