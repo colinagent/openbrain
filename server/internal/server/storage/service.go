@@ -17,10 +17,20 @@ type Service struct {
 }
 
 type workspaceIndexFile struct {
-	Version    int                               `json:"version"`
-	Accounts   map[string]*workspaceIndexAccount `json:"accounts,omitempty"`
-	Workspaces []workspaceEntry                  `json:"workspaces,omitempty"`
-	ActiveUID  string                            `json:"-"`
+	Version            int                                  `json:"version"`
+	Deployments        map[string]*workspaceIndexDeployment `json:"deployments"`
+	Workspaces         []workspaceEntry                     `json:"workspaces,omitempty"`
+	ActiveDeploymentID string                               `json:"-"`
+	ActiveOrgID        string                               `json:"-"`
+	ActiveUID          string                               `json:"-"`
+}
+
+type workspaceIndexDeployment struct {
+	Organizations map[string]*workspaceIndexOrganization `json:"organizations"`
+}
+
+type workspaceIndexOrganization struct {
+	Accounts map[string]*workspaceIndexAccount `json:"accounts"`
 }
 
 type workspaceIndexAccount struct {
@@ -270,12 +280,11 @@ func normalizeWorkspaceEntryStorage(entry *workspaceEntry) {
 }
 
 func (s *Service) loadIndex() (*workspaceIndexFile, error) {
-	uid, _ := s.loadAuthUID()
+	auth, _ := s.loadAuthIndexContext()
 	raw, err := os.ReadFile(s.indexPath())
 	if err != nil {
 		if os.IsNotExist(err) {
-			index := &workspaceIndexFile{Version: 2, Accounts: map[string]*workspaceIndexAccount{}, ActiveUID: uid}
-			index.activate(uid)
+			index := newWorkspaceIndex(auth)
 			return index, nil
 		}
 		return nil, err
@@ -284,81 +293,156 @@ func (s *Service) loadIndex() (*workspaceIndexFile, error) {
 	if err := json.Unmarshal(raw, &index); err != nil {
 		return nil, err
 	}
-	if index.Version != 2 || index.Accounts == nil || strings.TrimSpace(uid) == "" {
-		index = workspaceIndexFile{Version: 2, Accounts: map[string]*workspaceIndexAccount{}, ActiveUID: uid}
-		index.activate(uid)
-		return &index, nil
+	if index.Version != 3 || index.Deployments == nil || !auth.valid() {
+		return newWorkspaceIndex(auth), nil
 	}
-	index.activate(uid)
+	index.activate(auth)
 	return &index, nil
 }
 
 func (s *Service) saveIndex(index *workspaceIndexFile) error {
+	auth, _ := s.loadAuthIndexContext()
 	if index == nil {
-		index = &workspaceIndexFile{Version: 2}
+		index = newWorkspaceIndex(auth)
 	}
-	index.Version = 2
-	if strings.TrimSpace(index.ActiveUID) == "" {
-		index.ActiveUID, _ = s.loadAuthUID()
+	index.Version = 3
+	if strings.TrimSpace(index.ActiveDeploymentID) == "" ||
+		strings.TrimSpace(index.ActiveOrgID) == "" ||
+		strings.TrimSpace(index.ActiveUID) == "" {
+		index.ActiveDeploymentID = auth.DeploymentID
+		index.ActiveOrgID = auth.OrgID
+		index.ActiveUID = auth.UID
 	}
-	if index.Accounts == nil {
-		index.Accounts = map[string]*workspaceIndexAccount{}
+	if index.Deployments == nil {
+		index.Deployments = map[string]*workspaceIndexDeployment{}
 	}
-	if uid := strings.TrimSpace(index.ActiveUID); uid != "" {
-		account := index.ensureAccount(uid)
+	if index.activeContext().valid() {
+		account := index.ensureAccount(index.activeContext())
 		account.Workspaces = sortedWorkspaceEntries(index.Workspaces)
 	}
-	for _, account := range index.Accounts {
-		if account == nil {
+	for _, deployment := range index.Deployments {
+		if deployment == nil {
 			continue
 		}
-		account.Workspaces = sortedWorkspaceEntries(account.Workspaces)
+		for _, organization := range deployment.Organizations {
+			if organization == nil {
+				continue
+			}
+			for _, account := range organization.Accounts {
+				if account != nil {
+					account.Workspaces = sortedWorkspaceEntries(account.Workspaces)
+				}
+			}
+		}
 	}
 	index.Workspaces = nil
 	return writeJSONAtomic(s.indexPath(), index)
 }
 
-func (s *Service) loadAuthUID() (string, error) {
-	raw, err := os.ReadFile(filepath.Join(s.homeDir, ".openbrain", "configs", "user", "auth.json"))
-	if err != nil {
-		return "", err
-	}
-	var auth struct {
-		UID   string `json:"uid"`
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal(raw, &auth); err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(auth.UID) == "" || strings.TrimSpace(auth.Token) == "" {
-		return "", errors.New("auth required")
-	}
-	return strings.TrimSpace(auth.UID), nil
+type authIndexContext struct {
+	DeploymentID string
+	OrgID        string
+	UID          string
 }
 
-func (index *workspaceIndexFile) activate(uid string) {
-	uid = strings.TrimSpace(uid)
-	index.ActiveUID = uid
-	if index.Accounts == nil {
-		index.Accounts = map[string]*workspaceIndexAccount{}
+func (context authIndexContext) valid() bool {
+	return strings.TrimSpace(context.DeploymentID) != "" &&
+		strings.TrimSpace(context.OrgID) != "" &&
+		strings.TrimSpace(context.UID) != ""
+}
+
+func (s *Service) loadAuthIndexContext() (authIndexContext, error) {
+	raw, err := os.ReadFile(filepath.Join(s.homeDir, ".openbrain", "configs", "user", "auth.json"))
+	if err != nil {
+		return authIndexContext{}, err
 	}
-	if uid == "" {
+	var auth struct {
+		Version      int    `json:"version"`
+		UID          string `json:"uid"`
+		Token        string `json:"token"`
+		DeploymentID string `json:"deploymentID"`
+		OrgID        string `json:"orgID"`
+		IdentityID   string `json:"identityID"`
+		ConnectionID string `json:"connectionID"`
+		AuthMethod   string `json:"authMethod"`
+		AuthTime     string `json:"authTime"`
+		ExpiresAt    string `json:"expiresAt"`
+	}
+	if err := json.Unmarshal(raw, &auth); err != nil {
+		return authIndexContext{}, err
+	}
+	if auth.Version != 2 || strings.TrimSpace(auth.UID) == "" ||
+		strings.TrimSpace(auth.Token) == "" || strings.TrimSpace(auth.DeploymentID) == "" ||
+		strings.TrimSpace(auth.OrgID) == "" || strings.TrimSpace(auth.IdentityID) == "" ||
+		strings.TrimSpace(auth.ConnectionID) == "" || strings.TrimSpace(auth.AuthMethod) == "" ||
+		strings.TrimSpace(auth.AuthTime) == "" || strings.TrimSpace(auth.ExpiresAt) == "" {
+		return authIndexContext{}, errors.New("tenant-bound auth required")
+	}
+	return authIndexContext{
+		DeploymentID: strings.TrimSpace(auth.DeploymentID),
+		OrgID:        strings.TrimSpace(auth.OrgID),
+		UID:          strings.TrimSpace(auth.UID),
+	}, nil
+}
+
+func (s *Service) loadAuthUID() (string, error) {
+	auth, err := s.loadAuthIndexContext()
+	return auth.UID, err
+}
+
+func newWorkspaceIndex(auth authIndexContext) *workspaceIndexFile {
+	index := &workspaceIndexFile{Version: 3, Deployments: map[string]*workspaceIndexDeployment{}}
+	index.activate(auth)
+	return index
+}
+
+func (index *workspaceIndexFile) activeContext() authIndexContext {
+	return authIndexContext{
+		DeploymentID: strings.TrimSpace(index.ActiveDeploymentID),
+		OrgID:        strings.TrimSpace(index.ActiveOrgID),
+		UID:          strings.TrimSpace(index.ActiveUID),
+	}
+}
+
+func (index *workspaceIndexFile) activate(auth authIndexContext) {
+	index.ActiveDeploymentID = strings.TrimSpace(auth.DeploymentID)
+	index.ActiveOrgID = strings.TrimSpace(auth.OrgID)
+	index.ActiveUID = strings.TrimSpace(auth.UID)
+	if index.Deployments == nil {
+		index.Deployments = map[string]*workspaceIndexDeployment{}
+	}
+	if !index.activeContext().valid() {
 		index.Workspaces = nil
 		return
 	}
-	account := index.ensureAccount(uid)
+	account := index.ensureAccount(index.activeContext())
 	index.Workspaces = append([]workspaceEntry(nil), account.Workspaces...)
 }
 
-func (index *workspaceIndexFile) ensureAccount(uid string) *workspaceIndexAccount {
-	uid = strings.TrimSpace(uid)
-	if index.Accounts == nil {
-		index.Accounts = map[string]*workspaceIndexAccount{}
+func (index *workspaceIndexFile) ensureAccount(auth authIndexContext) *workspaceIndexAccount {
+	if index.Deployments == nil {
+		index.Deployments = map[string]*workspaceIndexDeployment{}
 	}
-	account := index.Accounts[uid]
+	deployment := index.Deployments[auth.DeploymentID]
+	if deployment == nil {
+		deployment = &workspaceIndexDeployment{Organizations: map[string]*workspaceIndexOrganization{}}
+		index.Deployments[auth.DeploymentID] = deployment
+	}
+	if deployment.Organizations == nil {
+		deployment.Organizations = map[string]*workspaceIndexOrganization{}
+	}
+	organization := deployment.Organizations[auth.OrgID]
+	if organization == nil {
+		organization = &workspaceIndexOrganization{Accounts: map[string]*workspaceIndexAccount{}}
+		deployment.Organizations[auth.OrgID] = organization
+	}
+	if organization.Accounts == nil {
+		organization.Accounts = map[string]*workspaceIndexAccount{}
+	}
+	account := organization.Accounts[auth.UID]
 	if account == nil {
 		account = &workspaceIndexAccount{}
-		index.Accounts[uid] = account
+		organization.Accounts[auth.UID] = account
 	}
 	return account
 }
@@ -381,7 +465,7 @@ func (s *Service) indexPath() string {
 }
 
 func writeJSONAtomic(path string, value any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	raw, err := json.MarshalIndent(value, "", "  ")
@@ -389,11 +473,31 @@ func writeJSONAtomic(path string, value any) error {
 		return err
 	}
 	raw = append(raw, '\n')
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o644); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+"-*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(raw); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
 }
 
 func cleanPath(value string) string {

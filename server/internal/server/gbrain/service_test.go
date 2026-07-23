@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -401,9 +402,7 @@ func TestListCachedOpenBrainSourcesPrefersSnapshotOverWorkspaceIndex(t *testing.
 		t.Fatal(err)
 	}
 	rawIndex := `{"version":2,"accounts":{"user-bob":{"workspaces":[{"workspaceID":"ws-alpha","orgID":"cloud","localName":"Index Alpha","path":"/tmp/alpha","createdAt":"2026-06-01T00:00:00Z","updatedAt":"2026-06-01T00:00:00Z"}]}}}`
-	if err := os.WriteFile(indexPath, []byte(rawIndex), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCurrentWorkspaceIndexFixture(t, indexPath, rawIndex)
 
 	res := service.ListCachedOpenBrainSources(context.Background())
 	if !res.Success || len(res.Sources) != 1 {
@@ -417,11 +416,12 @@ func TestListCachedOpenBrainSourcesPrefersSnapshotOverWorkspaceIndex(t *testing.
 func TestListCachedOpenBrainSourcesIgnoresSnapshotForDifferentAuth(t *testing.T) {
 	service := newCloudTestService(t, "http://127.0.0.1.invalid")
 	if err := service.saveCloudSourcesSnapshotFile(cloudSourcesSnapshotFile{
-		Version:   1,
-		FetchedAt: "2026-06-20T01:02:03Z",
-		UID:       "user-other",
-		OrgID:     "cloud",
-		Provider:  "cloud",
+		Version:      2,
+		FetchedAt:    "2026-06-20T01:02:03Z",
+		DeploymentID: "dep-test",
+		UID:          "user-other",
+		OrgID:        "cloud",
+		Provider:     "cloud",
 		Sources: []Source{{
 			SourceID:    "ws-alpha",
 			WorkspaceID: "ws-alpha",
@@ -437,9 +437,7 @@ func TestListCachedOpenBrainSourcesIgnoresSnapshotForDifferentAuth(t *testing.T)
 		t.Fatal(err)
 	}
 	rawIndex := `{"version":2,"accounts":{"user-bob":{"workspaces":[{"workspaceID":"ws-alpha","orgID":"cloud","localName":"Index Alpha","path":"/tmp/alpha","createdAt":"2026-06-01T00:00:00Z","updatedAt":"2026-06-01T00:00:00Z"}]}}}`
-	if err := os.WriteFile(indexPath, []byte(rawIndex), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCurrentWorkspaceIndexFixture(t, indexPath, rawIndex)
 
 	res := service.ListCachedOpenBrainSources(context.Background())
 	if !res.Success || len(res.Sources) != 1 {
@@ -447,6 +445,35 @@ func TestListCachedOpenBrainSourcesIgnoresSnapshotForDifferentAuth(t *testing.T)
 	}
 	if res.Sources[0].Name != "Index Alpha" {
 		t.Fatalf("mismatched snapshot should fall back to index, got %+v", res.Sources[0])
+	}
+}
+
+func TestListCachedOpenBrainSourcesIgnoresSnapshotForDifferentDeployment(t *testing.T) {
+	service := newCloudTestService(t, "http://127.0.0.1.invalid")
+	if err := service.saveCloudSourcesSnapshotFile(cloudSourcesSnapshotFile{
+		Version:      2,
+		FetchedAt:    "2026-06-20T01:02:03Z",
+		DeploymentID: "dep-other",
+		UID:          "user-bob",
+		OrgID:        "cloud",
+		Provider:     "cloud",
+		Sources: []Source{{
+			SourceID:    "ws-other-deployment",
+			WorkspaceID: "ws-other-deployment",
+			OrgID:       "cloud",
+			Name:        "Other Deployment",
+			BrainID:     "personal",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	res := service.ListCachedOpenBrainSources(context.Background())
+	if !res.Success {
+		t.Fatalf("unexpected response: %+v", res)
+	}
+	if len(res.Sources) != 0 {
+		t.Fatalf("snapshot from another deployment must be invisible: %+v", res.Sources)
 	}
 }
 
@@ -502,9 +529,7 @@ func TestListOpenBrainSourcesRekeysWorkspaceIndexByRepository(t *testing.T) {
 		}]
 	}`
 	rawIndex = strings.ReplaceAll(rawIndex, "__REPO_PATH__", repoPath)
-	if err := os.WriteFile(indexPath, []byte(rawIndex), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCurrentWorkspaceIndexFixture(t, indexPath, rawIndex)
 
 	res := service.ListOpenBrainSources(context.Background())
 	if !res.Success || len(res.Sources) != 1 {
@@ -529,9 +554,9 @@ func TestListOpenBrainSourcesRekeysWorkspaceIndexByRepository(t *testing.T) {
 	if err := json.Unmarshal(rawSaved, &saved); err != nil {
 		t.Fatal(err)
 	}
-	account := saved.Accounts["user-bob"]
+	account := workspaceIndexFixtureAccount(saved, "user-bob")
 	if account == nil || len(account.Workspaces) != 1 || account.Workspaces[0].WorkspaceID != "ws-new" || account.Workspaces[0].Path != repoPath {
-		t.Fatalf("unexpected saved index: %+v", saved.Accounts)
+		t.Fatalf("unexpected saved index: %+v", saved.Deployments)
 	}
 }
 
@@ -663,11 +688,9 @@ func TestUpsertCloudWorkspaceIndexRejectsPathCollision(t *testing.T) {
 			}
 		}
 	}`
-	if err := os.WriteFile(indexPath, []byte(rawIndex), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCurrentWorkspaceIndexFixture(t, indexPath, rawIndex)
 
-	_, err := service.upsertCloudWorkspaceIndex(authConfig{UID: "user-bob"}, createWorkspaceResult{
+	_, err := service.upsertCloudWorkspaceIndex(testAuthContext("user-bob"), createWorkspaceResult{
 		WorkspaceID:      "ws-beta",
 		OrgID:            "cloud",
 		TemplateID:       cloudWorkspaceTemplateID,
@@ -689,9 +712,9 @@ func TestUpsertCloudWorkspaceIndexRejectsPathCollision(t *testing.T) {
 	if err := json.Unmarshal(rawSaved, &saved); err != nil {
 		t.Fatal(err)
 	}
-	account := saved.Accounts["user-bob"]
+	account := workspaceIndexFixtureAccount(saved, "user-bob")
 	if account == nil || len(account.Workspaces) != 1 || account.Workspaces[0].WorkspaceID != "ws-alpha" {
-		t.Fatalf("path collision should not overwrite old binding: %+v", saved.Accounts)
+		t.Fatalf("path collision should not overwrite old binding: %+v", saved.Deployments)
 	}
 }
 
@@ -720,9 +743,7 @@ func TestUpsertCloudWorkspaceIndexRequiresTakeoverForOtherAccountPath(t *testing
 			}
 		}
 	}`
-	if err := os.WriteFile(indexPath, []byte(rawIndex), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCurrentWorkspaceIndexFixture(t, indexPath, rawIndex)
 
 	workspace := createWorkspaceResult{
 		WorkspaceID:      "ws-beta",
@@ -734,13 +755,13 @@ func TestUpsertCloudWorkspaceIndexRequiresTakeoverForOtherAccountPath(t *testing
 		Repository:       map[string]interface{}{"provider": "github", "owner": "colinagent", "name": "beta"},
 		Storage:          map[string]interface{}{"provider": "github", "remoteURL": "https://github.com/colinagent/beta.git"},
 	}
-	_, err := service.upsertCloudWorkspaceIndex(authConfig{UID: "user-bob"}, workspace, "/tmp/openbrain-alpha", "beta", false)
+	_, err := service.upsertCloudWorkspaceIndex(testAuthContext("user-bob"), workspace, "/tmp/openbrain-alpha", "beta", false)
 	var ownerErr *workspacePathOwnerError
 	if !errors.As(err, &ownerErr) || ownerErr.ownerUID != "user-alice" {
 		t.Fatalf("expected other account path owner error, got %v", err)
 	}
 
-	entry, err := service.upsertCloudWorkspaceIndex(authConfig{UID: "user-bob"}, workspace, "/tmp/openbrain-alpha", "beta", true)
+	entry, err := service.upsertCloudWorkspaceIndex(testAuthContext("user-bob"), workspace, "/tmp/openbrain-alpha", "beta", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -755,12 +776,12 @@ func TestUpsertCloudWorkspaceIndexRequiresTakeoverForOtherAccountPath(t *testing
 	if err := json.Unmarshal(rawSaved, &saved); err != nil {
 		t.Fatal(err)
 	}
-	if alice := saved.Accounts["user-alice"]; alice == nil || len(alice.Workspaces) != 0 {
-		t.Fatalf("takeover should remove old account path binding: %+v", saved.Accounts)
+	if alice := workspaceIndexFixtureAccount(saved, "user-alice"); alice == nil || len(alice.Workspaces) != 0 {
+		t.Fatalf("takeover should remove old account path binding: %+v", saved.Deployments)
 	}
-	bob := saved.Accounts["user-bob"]
+	bob := workspaceIndexFixtureAccount(saved, "user-bob")
 	if bob == nil || len(bob.Workspaces) != 1 || bob.Workspaces[0].WorkspaceID != "ws-beta" {
-		t.Fatalf("takeover should bind current account: %+v", saved.Accounts)
+		t.Fatalf("takeover should bind current account: %+v", saved.Deployments)
 	}
 }
 
@@ -1000,8 +1021,10 @@ func TestCreateOpenBrainSourceRollbackKeepsExistingPathBinding(t *testing.T) {
 		LastVerifyReason: sourceBindingReasonConnected,
 	}
 	if err := service.saveWorkspaceIndex(workspaceIndexFile{
-		ActiveUID:  "user-bob",
-		Workspaces: []workspaceIndexEntry{existingEntry},
+		ActiveDeploymentID: "dep-test",
+		ActiveOrgID:        "cloud",
+		ActiveUID:          "user-bob",
+		Workspaces:         []workspaceIndexEntry{existingEntry},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1016,7 +1039,7 @@ func TestCreateOpenBrainSourceRollbackKeepsExistingPathBinding(t *testing.T) {
 	if !syncCalled || !rollbackCalled || !res.CleanupAttempted || !res.CleanupSucceeded || res.CleanupError != "" {
 		t.Fatalf("rollback state mismatch: sync=%v rollback=%v response=%+v", syncCalled, rollbackCalled, res)
 	}
-	index, err := service.loadWorkspaceIndex(authConfig{UID: "user-bob"}, nil, false)
+	index, err := service.loadWorkspaceIndex(testAuthContext("user-bob"), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1118,7 +1141,7 @@ func TestCreateOpenBrainSourceRollsBackWhenInitialGitImportFails(t *testing.T) {
 		t.Fatalf(".git stat err = %v, want removed", err)
 	}
 
-	index, err := service.loadWorkspaceIndex(authConfig{UID: "user-bob"}, nil, false)
+	index, err := service.loadWorkspaceIndex(testAuthContext("user-bob"), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1182,9 +1205,7 @@ func TestVerifyGrantedWorkspaceUsesIndexRepositoryWhenCloudWorkspaceIsSanitized(
 		}
 	}`
 	rawIndex = strings.ReplaceAll(rawIndex, "__REPO_PATH__", repoPath)
-	if err := os.WriteFile(indexPath, []byte(rawIndex), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCurrentWorkspaceIndexFixture(t, indexPath, rawIndex)
 
 	res := service.VerifyOpenBrainSource(context.Background(), mutationRequest{WorkspaceID: "ws-shared", OrgID: "cloud"})
 	if !res.Success || res.Workspace == nil || res.Workspace.BindingStatus != sourceBindingConnected {
@@ -1292,9 +1313,7 @@ func TestRecoveryCandidatesUseGrantedIndexRepositoryWhenCloudWorkspaceIsSanitize
 	if err := os.MkdirAll(filepath.Dir(indexPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(indexPath, []byte(rawIndex), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCurrentWorkspaceIndexFixture(t, indexPath, rawIndex)
 
 	matchPath := initGitHubRepo(t, "alice", "research")
 	res := service.ListOpenBrainSourceRecoveryCandidates(context.Background(), recoveryCandidatesRequest{
@@ -1337,11 +1356,9 @@ func TestUpsertCloudWorkspaceIndexUpdatesSameWorkspacePathAndUnhides(t *testing.
 			}
 		}
 	}`
-	if err := os.WriteFile(indexPath, []byte(rawIndex), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCurrentWorkspaceIndexFixture(t, indexPath, rawIndex)
 
-	entry, err := service.upsertCloudWorkspaceIndex(authConfig{UID: "user-bob"}, createWorkspaceResult{
+	entry, err := service.upsertCloudWorkspaceIndex(testAuthContext("user-bob"), createWorkspaceResult{
 		WorkspaceID:      "ws-alpha",
 		OrgID:            "cloud",
 		TemplateID:       cloudWorkspaceTemplateID,
@@ -1366,9 +1383,9 @@ func TestUpsertCloudWorkspaceIndexUpdatesSameWorkspacePathAndUnhides(t *testing.
 	if err := json.Unmarshal(rawSaved, &saved); err != nil {
 		t.Fatal(err)
 	}
-	account := saved.Accounts["user-bob"]
+	account := workspaceIndexFixtureAccount(saved, "user-bob")
 	if account == nil || len(account.Workspaces) != 1 || account.Workspaces[0].Path != "/tmp/openbrain-new" {
-		t.Fatalf("expected same workspace path update: %+v", saved.Accounts)
+		t.Fatalf("expected same workspace path update: %+v", saved.Deployments)
 	}
 	if len(account.HiddenWorkspaces) != 0 {
 		t.Fatalf("successful rebind should unhide workspace: %+v", account.HiddenWorkspaces)
@@ -1479,11 +1496,77 @@ func newCloudTestService(t *testing.T, gateway string) *Service {
 	if err := os.MkdirAll(authDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	raw := `{"version":1,"gateway":` + strconv.Quote(gateway) + `,"token":"session-token","uid":"user-bob","defaultOrgID":"cloud","updatedAt":1}`
+	raw := `{"version":2,"gateway":` + strconv.Quote(gateway) + `,"token":"session-token","uid":"user-bob","deploymentID":"dep-test","orgID":"cloud","identityID":"idn-test","connectionID":"conn-test","authMethod":"email","authTime":"2026-07-23T00:00:00Z","expiresAt":"2026-07-24T00:00:00Z","updatedAt":1}`
 	if err := os.WriteFile(filepath.Join(authDir, "auth.json"), []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return NewService(baseDir)
+}
+
+func testAuthContext(uid string) authConfig {
+	return authConfig{
+		Version:      2,
+		Token:        "session-token",
+		UID:          uid,
+		DeploymentID: "dep-test",
+		OrgID:        "cloud",
+		IdentityID:   "idn-test",
+		ConnectionID: "conn-test",
+		AuthMethod:   "email",
+		AuthTime:     "2026-07-23T00:00:00Z",
+		ExpiresAt:    "2026-07-24T00:00:00Z",
+	}
+}
+
+func writeCurrentWorkspaceIndexFixture(t *testing.T, target string, raw string) {
+	t.Helper()
+	var legacy struct {
+		Version          int                               `json:"version"`
+		Accounts         map[string]*workspaceIndexAccount `json:"accounts"`
+		Workspaces       []workspaceIndexEntry             `json:"workspaces"`
+		HiddenWorkspaces []hiddenWorkspaceEntry            `json:"hiddenWorkspaces"`
+	}
+	if err := json.Unmarshal([]byte(raw), &legacy); err != nil {
+		t.Fatalf("parse workspace index fixture: %v", err)
+	}
+	accounts := legacy.Accounts
+	if accounts == nil {
+		accounts = map[string]*workspaceIndexAccount{
+			"user-bob": {
+				Workspaces:       legacy.Workspaces,
+				HiddenWorkspaces: legacy.HiddenWorkspaces,
+			},
+		}
+	}
+	current := workspaceIndexFile{
+		Version: 3,
+		Deployments: map[string]*workspaceIndexDeployment{
+			"dep-test": {
+				Organizations: map[string]*workspaceIndexOrganization{
+					"cloud": {Accounts: accounts},
+				},
+			},
+		},
+	}
+	encoded, err := json.Marshal(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, encoded, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func workspaceIndexFixtureAccount(index workspaceIndexFile, uid string) *workspaceIndexAccount {
+	deployment := index.Deployments["dep-test"]
+	if deployment == nil {
+		return nil
+	}
+	organization := deployment.Organizations["cloud"]
+	if organization == nil {
+		return nil
+	}
+	return organization.Accounts[uid]
 }
 
 func initGitHubRepo(t *testing.T, owner string, name string) string {
@@ -1501,6 +1584,26 @@ func initGitHubRepo(t *testing.T, owner string, name string) string {
 		t.Fatalf("git remote add failed: %v\n%s", err, string(out))
 	}
 	return dir
+}
+
+func TestWritePrivateFileAtomicUsesPrivateFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX file modes")
+	}
+	target := filepath.Join(t.TempDir(), "cloud-sources.json")
+	if err := os.WriteFile(target, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePrivateFileAtomic(target, []byte("{\"version\":2}\n")); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("private runtime metadata mode = %o, want 600", got)
+	}
 }
 
 func TestImportGitWorkspaceRebasesRemoteInitialCommitBeforePush(t *testing.T) {

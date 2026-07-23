@@ -21,10 +21,12 @@ export function isAuthInvalidResponse(status: number, message?: string): boolean
   }
   return normalized === 'invalid session'
     || normalized === 'invalid session uid'
+    || normalized === 'session revoked'
     || normalized === 'missing authorization'
     || normalized === 'authentication required'
     || normalized === 'unauthorized'
-    || normalized.includes('invalid session');
+    || normalized.includes('invalid session')
+    || normalized.includes('session revoked');
 }
 
 export async function readErrorMessage(response: Response): Promise<string> {

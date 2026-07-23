@@ -76,7 +76,7 @@ func writeTestAuthJSON(t *testing.T, baseDir string, token string) {
 	if err := os.MkdirAll(authDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := fmt.Sprintf(`{"token":%q}`, token)
+	body := tenantBoundAuthFixture(fmt.Sprintf(`{"token":%q,"uid":"user-test"}`, token))
 	if err := os.WriteFile(filepath.Join(authDir, "auth.json"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}

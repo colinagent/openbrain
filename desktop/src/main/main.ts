@@ -62,7 +62,12 @@ import {
   normalizeActiveOrgID,
   type AuthConfig,
 } from './auth/authStore';
-import { isAuthInvalidError } from './auth/authErrors';
+import {
+  AuthInvalidError,
+  isAuthInvalidError,
+  isAuthInvalidResponse,
+  readErrorMessage,
+} from './auth/authErrors';
 import { authFetch, readableNetworkError } from './auth/netFetch';
 import {
   discoverGatewayInfo,
@@ -72,6 +77,7 @@ import {
 } from './auth/gatewayDiscovery';
 import {
   deviceVerificationLoginUri,
+  exchangeTenantSession,
   pollDeviceToken,
   requestDeviceCode,
   type DeviceCodeSession,
@@ -1057,6 +1063,7 @@ type AuthOrgEntry = {
   id: string;
   slug?: string;
   name?: string;
+  kind?: string;
 };
 
 type OpenBrainOrgEntry = {
@@ -1064,10 +1071,8 @@ type OpenBrainOrgEntry = {
   name: string;
 };
 
-const FALLBACK_DEFAULT_ORG_ID = 'cloud';
-
-function workspaceCreationOrgTargets(_auth: AuthConfig, orgs: AuthOrgEntry[]): AuthOrgEntry[] {
-  return orgs;
+function workspaceCreationOrgTargets(auth: AuthConfig, orgs: AuthOrgEntry[]): AuthOrgEntry[] {
+  return orgs.filter((org) => org.id === auth.orgID);
 }
 
 function parseOpenBrainCatalogApi(
@@ -1100,9 +1105,15 @@ async function fetchAuthOrgs(gateway: string, token: string): Promise<AuthOrgEnt
     },
   });
   if (!res.ok) {
+    const message = await readErrorMessage(res);
+    if (isAuthInvalidResponse(res.status, message)) {
+      throw new AuthInvalidError(message);
+    }
     return [];
   }
-  const payload = (await res.json().catch(() => null)) as { orgs?: Array<{ id?: string; slug?: string; name?: string }> } | null;
+  const payload = (await res.json().catch(() => null)) as {
+    orgs?: Array<{ id?: string; slug?: string; name?: string; kind?: string }>;
+  } | null;
   if (!Array.isArray(payload?.orgs)) {
     return [];
   }
@@ -1116,6 +1127,7 @@ async function fetchAuthOrgs(gateway: string, token: string): Promise<AuthOrgEnt
       id,
       slug: (org.slug || '').trim() || id,
       name: (org.name || '').trim() || undefined,
+      kind: (org.kind || '').trim() || undefined,
     });
   }
   return out;
@@ -1135,70 +1147,72 @@ function normalizeOrganizationCode(raw: unknown): string | undefined {
   return value;
 }
 
-async function resolveDefaultActiveOrg(config: AuthConfig): Promise<AuthConfig> {
+async function resolveBoundOrgMetadata(config: AuthConfig): Promise<AuthConfig> {
   let orgs: AuthOrgEntry[] = [];
   try {
     orgs = await fetchAuthOrgs(config.gateway, config.token);
-  } catch {
+  } catch (err) {
+    if (isAuthInvalidError(err)) {
+      throw err;
+    }
     return config;
   }
-  const activeOrgID = normalizeActiveOrgID(config.activeOrgID);
-  if (activeOrgID && orgs.some((org) => org.id === activeOrgID)) {
-    return {
-      ...config,
-      activeOrgID,
-      activeOrgName: (config.activeOrgName || '').trim() || orgs.find((org) => org.id === activeOrgID)?.name || activeOrgID,
-    };
+  const bound = orgs.find((org) => org.id === config.orgID);
+  if (!bound) {
+    return config;
   }
-  if (orgs.length === 0) {
-    if (!config.activeOrgID && !config.activeOrgName) {
-      return config;
-    }
-    return {
-      ...config,
-      activeOrgID: undefined,
-      activeOrgName: undefined,
-      updatedAt: Date.now(),
-    };
-  }
-  const defaultOrgID = normalizeActiveOrgID(config.defaultOrgID);
-  const first = (defaultOrgID ? orgs.find((org) => org.id === defaultOrgID) : undefined) || orgs[0];
   return {
     ...config,
-    activeOrgID: first.id,
-    activeOrgName: first.name || first.id,
+    orgSlug: bound.slug,
+    orgName: bound.name || bound.id,
     updatedAt: Date.now(),
   };
 }
 
-async function ensureDefaultActiveOrg(homeDir: string, config: AuthConfig): Promise<AuthConfig> {
-  const next = await resolveDefaultActiveOrg(config);
+async function ensureBoundOrgMetadata(homeDir: string, config: AuthConfig): Promise<AuthConfig | null> {
+  let next: AuthConfig;
+  try {
+    next = await resolveBoundOrgMetadata(config);
+  } catch (err) {
+    if (!isAuthInvalidError(err)) {
+      throw err;
+    }
+    await invalidateAuthSession('session_expired');
+    return null;
+  }
   if (JSON.stringify(next) !== JSON.stringify(config)) {
     await saveAuthConfig(homeDir, next);
   }
   return next;
 }
 
-async function ensureRequestedActiveOrg(homeDir: string, config: AuthConfig, orgSlug?: string): Promise<AuthConfig> {
+async function validateBoundOrg(
+  homeDir: string,
+  config: AuthConfig,
+  orgSlug?: string,
+): Promise<AuthConfig> {
   const requestedSlug = normalizeOrganizationCode(orgSlug);
-  if (!requestedSlug) {
-    return ensureDefaultActiveOrg(homeDir, config);
-  }
   let orgs: AuthOrgEntry[] = [];
   try {
     orgs = await fetchAuthOrgs(config.gateway, config.token);
   } catch (err) {
+    if (isAuthInvalidError(err)) {
+      throw err;
+    }
     console.warn('[Auth] Failed to fetch organizations for organization code:', readableNetworkError(err));
     throw new Error('Could not verify organization code right now. Check your network and try again.');
   }
-  const matched = orgs.find((org) => org.slug === requestedSlug || org.id === requestedSlug);
-  if (!matched) {
+  const bound = orgs.find((org) => org.id === config.orgID);
+  if (!bound) {
+    throw new Error('The authenticated organization is no longer available to this account.');
+  }
+  if (requestedSlug && bound.slug !== requestedSlug) {
     throw new Error(`Your account is not a member of organization "${requestedSlug}".`);
   }
   const next: AuthConfig = {
     ...config,
-    activeOrgID: matched.id,
-    activeOrgName: matched.name || matched.id,
+    orgSlug: bound.slug,
+    orgName: bound.name || bound.id,
     updatedAt: Date.now(),
   };
   await saveAuthConfig(homeDir, next);
@@ -1317,9 +1331,8 @@ async function fetchOpenBrainCatalogForOrg(auth: AuthConfig, org: OpenBrainOrgEn
   const headers: Record<string, string> = {
     Authorization: `Bearer ${auth.token}`,
   };
-  const defaultOrgID = normalizeActiveOrgID(auth.defaultOrgID) || FALLBACK_DEFAULT_ORG_ID;
-  if (org.id !== defaultOrgID) {
-    headers['X-Org-ID'] = org.id;
+  if (org.id !== auth.orgID) {
+    throw new Error('Cannot fetch a model catalog outside the token-bound organization.');
   }
   const modelsUrl = appendGatewayPath(aiGateway, '/v1/models');
   const policiesUrl = appendGatewayPath(aiGateway, '/v1/policies');
@@ -1372,20 +1385,11 @@ async function fetchOpenBrainCatalogForOrg(auth: AuthConfig, org: OpenBrainOrgEn
 
 async function fetchOpenBrainOrgCatalogs(auth: AuthConfig): Promise<OpenBrainCatalog[]> {
   const orgs = await fetchAuthOrgs(auth.gateway, auth.token);
-  const privateService = isPrivateAuthService(auth);
-  const activeOrgID = normalizeActiveOrgID(auth.activeOrgID);
-  const defaultOrgID = normalizeActiveOrgID(auth.defaultOrgID) || FALLBACK_DEFAULT_ORG_ID;
-  const defaultOrgName = (auth.defaultOrgName || '').trim() || 'Cloud';
-  const activeOrg = activeOrgID ? orgs.find((org) => org.id === activeOrgID) : undefined;
-  const privateOrg = activeOrg || orgs.find((org) => org.id === defaultOrgID) || orgs[0] || null;
-  const orgEntries: OpenBrainOrgEntry[] = privateService
-    ? [{
-        id: privateOrg?.id || defaultOrgID,
-        name: privateOrg?.name || privateOrg?.id || defaultOrgName,
-      }]
-    : (orgs.length > 0
-        ? orgs.map((org) => ({ id: org.id, name: org.name || org.id }))
-        : [{ id: defaultOrgID, name: defaultOrgName }]);
+  const boundOrg = orgs.find((org) => org.id === auth.orgID);
+  const orgEntries: OpenBrainOrgEntry[] = [{
+    id: auth.orgID,
+    name: boundOrg?.name || auth.orgName || auth.orgID,
+  }];
   const catalogs = await Promise.all(
     orgEntries.map((org) =>
       fetchOpenBrainCatalogForOrg(auth, org).catch((error) => {
@@ -2348,8 +2352,8 @@ function authChangedPayload(config: AuthConfig, profile?: UserProfile | null) {
     email: config.email,
     baseUrl: config.baseUrl,
     aiGateway: config.aiGateway,
-    activeOrgID: config.activeOrgID,
-    activeOrgName: config.activeOrgName,
+    activeOrgID: config.orgID,
+    activeOrgName: config.orgName || config.orgID,
     profile: matchedProfile || undefined,
   };
 }
@@ -2434,7 +2438,9 @@ async function saveFallbackProfile(
 async function handleAuthCallback(url: string) {
   const parsed = parseAuthCallbackUrl(url);
   if (!parsed) {
-    console.error('[Auth] Failed to parse auth callback URL:', url);
+    // The callback may contain a bearer token even when another field is
+    // malformed. Never copy the raw URL into application logs.
+    console.error('[Auth] Failed to parse auth callback URL.');
     return;
   }
 
@@ -2444,18 +2450,24 @@ async function handleAuthCallback(url: string) {
     const fallbackInfo = pendingLoginGatewayInfo;
     const authBaseUrl = parsed.baseUrl || fallbackInfo?.baseUrl || parsed.gateway || fallbackInfo?.gateway;
     const authGateway = parsed.gateway || fallbackInfo?.gateway || authBaseUrl;
-    const config = await ensureRequestedActiveOrg(
+    const config = await validateBoundOrg(
       homeDir,
-      createAuthConfig(
-        parsed.token,
-        parsed.uid,
-        parsed.email,
-        authBaseUrl,
-        authGateway,
-        parsed.aiGateway || fallbackInfo?.aiGateway,
-        parsed.defaultOrgID || fallbackInfo?.defaultOrg?.id,
-        parsed.defaultOrgName || fallbackInfo?.defaultOrg?.name
-      ),
+      createAuthConfig({
+        token: parsed.token,
+        uid: parsed.uid,
+        email: parsed.email,
+        baseUrl: authBaseUrl,
+        gateway: authGateway,
+        aiGateway: parsed.aiGateway || fallbackInfo?.aiGateway,
+        deploymentID: parsed.deploymentID,
+        orgID: parsed.orgID,
+        identityID: parsed.identityID,
+        connectionID: parsed.connectionID,
+        authMethod: parsed.authMethod,
+        assurance: parsed.assurance,
+        authTime: parsed.authTime,
+        expiresAt: parsed.expiresAt,
+      }),
       pendingLoginOrgSlug
     );
     pendingLoginGatewayInfo = null;
@@ -2779,7 +2791,7 @@ async function currentOpenBrainProviderContext() {
   const homeDir = app.getPath('home');
   const currentSettings = await ensureSettings();
   const loadedAuth = await loadAuthConfig(homeDir);
-  const auth = loadedAuth ? await ensureDefaultActiveOrg(homeDir, loadedAuth) : null;
+  const auth = loadedAuth ? await ensureBoundOrgMetadata(homeDir, loadedAuth) : null;
   return {
     homeDir,
     settings: currentSettings.user.openBrain,
@@ -2811,7 +2823,7 @@ ipcMain.handle('openBrain:setProvider', async (_event, input?: { provider?: stri
   settingsCache = merged;
   broadcastSettingsChanged(settingsCache);
   const loadedAuth = await loadAuthConfig(homeDir);
-  const auth = loadedAuth ? await ensureDefaultActiveOrg(homeDir, loadedAuth) : null;
+  const auth = loadedAuth ? await ensureBoundOrgMetadata(homeDir, loadedAuth) : null;
   return await getOpenBrainProviderStatus(merged.user.openBrain, auth);
 });
 
@@ -3046,7 +3058,7 @@ ipcMain.handle('workspace:createFromTemplate', async (_event, input?: { template
 ipcMain.handle('auth:listOrgs', async () => {
   const homeDir = app.getPath('home');
   const loadedConfig = await loadAuthConfig(homeDir);
-  const auth = loadedConfig ? await ensureDefaultActiveOrg(homeDir, loadedConfig) : null;
+  const auth = loadedConfig ? await ensureBoundOrgMetadata(homeDir, loadedConfig) : null;
   if (!auth) {
     return { success: false, error: 'Not logged in', orgs: [] };
   }
@@ -3054,7 +3066,7 @@ ipcMain.handle('auth:listOrgs', async () => {
     const orgs = await fetchAuthOrgs(auth.gateway, auth.token);
     return {
       success: true,
-      defaultOrgID: normalizeActiveOrgID(auth.defaultOrgID) || FALLBACK_DEFAULT_ORG_ID,
+      activeOrgID: auth.orgID,
       orgs,
       workspaceTargets: workspaceCreationOrgTargets(auth, orgs),
     };
@@ -3481,7 +3493,7 @@ ipcMain.on('settings:previewMarkdownContentWidth', async (_, payload: { value?: 
 ipcMain.handle('auth:get', async () => {
   const homeDir = app.getPath('home');
   const loadedConfig = await loadAuthConfig(homeDir);
-  const config = loadedConfig ? await ensureDefaultActiveOrg(homeDir, loadedConfig) : null;
+  const config = loadedConfig ? await ensureBoundOrgMetadata(homeDir, loadedConfig) : null;
   if (!config) {
     return null;
   }
@@ -3492,8 +3504,8 @@ ipcMain.handle('auth:get', async () => {
     email: config.email,
     baseUrl: config.baseUrl,
     aiGateway: config.aiGateway,
-    activeOrgID: config.activeOrgID,
-    activeOrgName: config.activeOrgName,
+    activeOrgID: config.orgID,
+    activeOrgName: config.orgName || config.orgID,
     profile: profile || undefined,
   };
 });
@@ -3504,6 +3516,7 @@ async function completeDeviceCodeLoginAttempt(
   gateway: string,
   gatewayInfo: GatewayInfo | null,
   orgSlug: string | undefined,
+  session: DeviceCodeSession,
   result: DeviceTokenResponse,
 ) {
   if (attemptID !== activeDeviceLoginAttempt) {
@@ -3513,18 +3526,27 @@ async function completeDeviceCodeLoginAttempt(
   try {
     const authBaseUrl = result.baseUrl || gatewayInfo?.baseUrl || gateway;
     const authGateway = result.gateway || gatewayInfo?.gateway || gateway;
-    const cfg = await ensureRequestedActiveOrg(
+    if (session.targetKind === 'organization' && result.orgID !== session.targetOrgID) {
+      throw new Error('The gateway returned a token for a different organization than the requested login target.');
+    }
+    const cfg = await validateBoundOrg(
       homeDir,
-      createAuthConfig(
-        result.token,
-        result.uid,
-        result.email,
-        authBaseUrl,
-        authGateway,
-        result.aiGateway || gatewayInfo?.aiGateway,
-        result.defaultOrg?.id || gatewayInfo?.defaultOrg?.id,
-        result.defaultOrg?.name || gatewayInfo?.defaultOrg?.name
-      ),
+      createAuthConfig({
+        token: result.token,
+        uid: result.uid,
+        email: result.email,
+        baseUrl: authBaseUrl,
+        gateway: authGateway,
+        aiGateway: result.aiGateway || gatewayInfo?.aiGateway,
+        deploymentID: result.deploymentID,
+        orgID: result.orgID,
+        identityID: result.identityID,
+        connectionID: result.connectionID,
+        authMethod: result.authMethod,
+        assurance: result.assurance,
+        authTime: result.authTime,
+        expiresAt: result.expiresAt,
+      }),
       orgSlug
     );
     await saveAuthConfig(homeDir, cfg);
@@ -3584,7 +3606,7 @@ async function startDeviceCodeLoginFlow(homeDir: string, gateway: string, gatewa
   activeDeviceLoginAttempt = attemptID;
   let session: DeviceCodeSession;
   try {
-    session = await requestDeviceCode(gateway);
+    session = await requestDeviceCode(gateway, orgSlug);
   } catch (err) {
     if (attemptID === activeDeviceLoginAttempt) {
       activeDeviceLoginAttempt = 0;
@@ -3595,10 +3617,8 @@ async function startDeviceCodeLoginFlow(homeDir: string, gateway: string, gatewa
     throw new Error('A newer sign-in attempt is already running.');
   }
 
-  console.log('[Auth] Device code:', session.userCode);
   const verificationLoginUri = deviceVerificationLoginUri(session.verificationUri);
-  console.log('[Auth] Verification URL:', session.verificationUri);
-  console.log('[Auth] Verification login URL:', verificationLoginUri);
+  console.log('[Auth] Device authorization started.');
   for (const { win } of windowRegistry.values()) {
     win.webContents.send('auth:deviceCode', {
       userCode: session.userCode,
@@ -3612,7 +3632,7 @@ async function startDeviceCodeLoginFlow(homeDir: string, gateway: string, gatewa
   });
 
   void pollDeviceToken(session, gateway)
-    .then((result) => completeDeviceCodeLoginAttempt(attemptID, homeDir, gateway, gatewayInfo, orgSlug, result))
+    .then((result) => completeDeviceCodeLoginAttempt(attemptID, homeDir, gateway, gatewayInfo, orgSlug, session, result))
     .catch((err) => {
       void failDeviceCodeLoginAttempt(attemptID, err);
     });
@@ -3620,8 +3640,6 @@ async function startDeviceCodeLoginFlow(homeDir: string, gateway: string, gatewa
 
 ipcMain.handle('auth:startLogin', async (_event, options?: LoginOptions) => {
   const homeDir = app.getPath('home');
-  const loadedConfig = await loadAuthConfig(homeDir);
-  const config = loadedConfig ? await ensureDefaultActiveOrg(homeDir, loadedConfig) : null;
   const requestedGateway = (options?.gateway || '').trim();
   const manualGateway = normalizeManualGateway(options?.gateway);
   const requestedOrgSlug = normalizeOrganizationCode(options?.orgSlug);
@@ -3653,17 +3671,64 @@ ipcMain.handle('auth:logout', async () => {
 ipcMain.handle('auth:setActiveOrg', async (_event, params: { orgID?: string | null; orgName?: string | null }) => {
   const homeDir = app.getPath('home');
   const loadedConfig = await loadAuthConfig(homeDir);
-  const config = loadedConfig ? await ensureDefaultActiveOrg(homeDir, loadedConfig) : null;
+  const config = loadedConfig ? await ensureBoundOrgMetadata(homeDir, loadedConfig) : null;
   if (!config) {
     return { success: false, error: 'Not logged in' };
   }
   const orgID = normalizeActiveOrgID(params?.orgID);
-  const next: AuthConfig = {
-    ...config,
-    activeOrgID: orgID,
-    activeOrgName: orgID ? (params?.orgName || '').trim() || orgID : undefined,
-    updatedAt: Date.now(),
-  };
+  if (!orgID) {
+    return { success: false, error: 'A valid organization is required.' };
+  }
+  if (orgID === config.orgID) {
+    return {
+      success: true,
+      activeOrgID: config.orgID,
+      activeOrgName: config.orgName || config.orgID,
+    };
+  }
+  const availableOrgs = await fetchAuthOrgs(config.gateway, config.token);
+  const targetOrg = availableOrgs.find((org) => org.id === orgID);
+  if (!targetOrg) {
+    return { success: false, error: 'Your account is not an active member of that organization.' };
+  }
+  let exchanged: DeviceTokenResponse;
+  try {
+    exchanged = await exchangeTenantSession(config.gateway, config.token, orgID);
+  } catch (err) {
+    if (isAuthInvalidError(err)) {
+      await invalidateAuthSession('session_expired');
+    }
+    throw err;
+  }
+  if (
+    exchanged.uid !== config.uid ||
+    exchanged.deploymentID !== config.deploymentID ||
+    exchanged.orgID !== orgID ||
+    exchanged.identityID !== config.identityID ||
+    exchanged.connectionID !== config.connectionID ||
+    exchanged.authMethod !== config.authMethod ||
+    exchanged.authTime !== config.authTime
+  ) {
+    throw new Error('OpenBrain gateway returned an inconsistent organization session.');
+  }
+  const next = createAuthConfig({
+    token: exchanged.token,
+    uid: exchanged.uid,
+    email: exchanged.email || config.email,
+    baseUrl: exchanged.baseUrl || config.baseUrl,
+    gateway: exchanged.gateway || config.gateway,
+    aiGateway: exchanged.aiGateway || config.aiGateway,
+    deploymentID: exchanged.deploymentID,
+    orgID: exchanged.orgID,
+    orgSlug: targetOrg.slug,
+    orgName: targetOrg.name || (params?.orgName || '').trim() || targetOrg.id,
+    identityID: exchanged.identityID,
+    connectionID: exchanged.connectionID,
+    authMethod: exchanged.authMethod,
+    assurance: exchanged.assurance,
+    authTime: exchanged.authTime,
+    expiresAt: exchanged.expiresAt,
+  });
   await saveAuthConfig(homeDir, next);
   const profile = await loadProfileForAuth(homeDir, next);
   broadcastAuthChanged(next, profile);
@@ -3671,7 +3736,7 @@ ipcMain.handle('auth:setActiveOrg', async (_event, params: { orgID?: string | nu
     const localConfig = await loadModelsConfig(homeDir);
     const openbrainCatalogs = await fetchOpenBrainOrgCatalogs(next);
     const merged = mergeOpenBrainOrgCatalogs(localConfig, openbrainCatalogs, Date.now(), {
-      activeOrgID: next.activeOrgID,
+      activeOrgID: next.orgID,
       privateOnly: isPrivateAuthService(next),
     });
     if (JSON.stringify(merged) !== JSON.stringify(localConfig)) {
@@ -3682,8 +3747,8 @@ ipcMain.handle('auth:setActiveOrg', async (_event, params: { orgID?: string | nu
   }
   return {
     success: true,
-    activeOrgID: next.activeOrgID,
-    activeOrgName: next.activeOrgName,
+    activeOrgID: next.orgID,
+    activeOrgName: next.orgName || next.orgID,
   };
 });
 
@@ -3717,14 +3782,14 @@ ipcMain.handle('models:get', async () => {
   const homeDir = app.getPath('home');
   const localConfig = await loadModelsConfig(homeDir);
   const loadedAuth = await loadAuthConfig(homeDir);
-  const auth = loadedAuth ? await ensureDefaultActiveOrg(homeDir, loadedAuth) : null;
+  const auth = loadedAuth ? await ensureBoundOrgMetadata(homeDir, loadedAuth) : null;
   if (!auth) {
     return localConfig;
   }
   try {
     const openbrainCatalogs = await fetchOpenBrainOrgCatalogs(auth);
     const merged = mergeOpenBrainOrgCatalogs(localConfig, openbrainCatalogs, Date.now(), {
-      activeOrgID: auth.activeOrgID,
+      activeOrgID: auth.orgID,
       privateOnly: isPrivateAuthService(auth),
     });
     if (JSON.stringify(merged) !== JSON.stringify(localConfig)) {
@@ -3746,14 +3811,14 @@ ipcMain.handle('models:refreshFromOpenBrain', async () => {
   const homeDir = app.getPath('home');
   const localConfig = await loadModelsConfig(homeDir);
   const loadedAuth = await loadAuthConfig(homeDir);
-  const auth = loadedAuth ? await ensureDefaultActiveOrg(homeDir, loadedAuth) : null;
+  const auth = loadedAuth ? await ensureBoundOrgMetadata(homeDir, loadedAuth) : null;
   if (!auth) {
     return { success: false, error: 'Not logged in', config: localConfig };
   }
   try {
     const openbrainCatalogs = await fetchOpenBrainOrgCatalogs(auth);
     const merged = mergeOpenBrainOrgCatalogs(localConfig, openbrainCatalogs, Date.now(), {
-      activeOrgID: auth.activeOrgID,
+      activeOrgID: auth.orgID,
       privateOnly: isPrivateAuthService(auth),
     });
     const saved = JSON.stringify(merged) !== JSON.stringify(localConfig) ? await saveModelsConfig(homeDir, merged) : merged;
@@ -3766,7 +3831,7 @@ ipcMain.handle('models:refreshFromOpenBrain', async () => {
 ipcMain.handle('dashboard:getHosts', async () => {
   const homeDir = app.getPath('home');
   const loadedAuth = await loadAuthConfig(homeDir);
-  const auth = loadedAuth ? await ensureDefaultActiveOrg(homeDir, loadedAuth) : null;
+  const auth = loadedAuth ? await ensureBoundOrgMetadata(homeDir, loadedAuth) : null;
   if (!auth) {
     return [];
   }
@@ -3777,14 +3842,14 @@ ipcMain.handle('dashboard:getHosts', async () => {
 ipcMain.handle('profile:get', async () => {
   const homeDir = app.getPath('home');
   const loadedConfig = await loadAuthConfig(homeDir);
-  const config = loadedConfig ? await ensureDefaultActiveOrg(homeDir, loadedConfig) : null;
+  const config = loadedConfig ? await ensureBoundOrgMetadata(homeDir, loadedConfig) : null;
   return config ? loadProfileForAuth(homeDir, config) : null;
 });
 
 ipcMain.handle('profile:refresh', async () => {
   const homeDir = app.getPath('home');
   const loadedConfig = await loadAuthConfig(homeDir);
-  const config = loadedConfig ? await ensureDefaultActiveOrg(homeDir, loadedConfig) : null;
+  const config = loadedConfig ? await ensureBoundOrgMetadata(homeDir, loadedConfig) : null;
   if (!config) {
     return { success: false, error: 'Not logged in' };
   }
@@ -3809,8 +3874,8 @@ ipcMain.handle('profile:refresh', async () => {
 
   return {
     success: true,
-    activeOrgID: config.activeOrgID,
-    activeOrgName: config.activeOrgName,
+    activeOrgID: config.orgID,
+    activeOrgName: config.orgName || config.orgID,
     profile,
   };
 });

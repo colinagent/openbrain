@@ -520,7 +520,7 @@ export interface ElectronAPI {
     listOrgs?: () => Promise<{
       success: boolean;
       error?: string;
-      defaultOrgID?: string;
+      activeOrgID?: string;
       orgs?: Array<{ id: string; slug?: string; name?: string }>;
       workspaceTargets?: Array<{ id: string; slug?: string; name?: string }>;
     }>;

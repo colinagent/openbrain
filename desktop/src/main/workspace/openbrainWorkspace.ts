@@ -5,6 +5,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { AuthConfig } from '../auth/authStore';
 import { resolveOpenBrainAPIBase } from '../auth/openbrainApiBase';
+import { writeJsonFileAtomic } from '../shared/jsonFile';
 import { buildPowerShellCommand } from '../remote/remoteRuntimeScripts';
 import { runSsh } from '../remote/ssh2Transport';
 import type { LocalGBrainSettings } from '../settings/settingsStore';
@@ -191,11 +192,21 @@ type HiddenWorkspaceIndexEntry = {
 };
 
 type WorkspaceIndexFile = {
-  version: number;
-  accounts?: Record<string, WorkspaceIndexAccount>;
+  version: 3;
+  deployments: Record<string, WorkspaceIndexDeployment>;
   workspaces: WorkspaceIndexEntry[];
   hiddenWorkspaces?: HiddenWorkspaceIndexEntry[];
+  activeDeploymentID?: string;
+  activeOrgID?: string;
   activeUID?: string;
+};
+
+type WorkspaceIndexDeployment = {
+  organizations: Record<string, WorkspaceIndexOrganization>;
+};
+
+type WorkspaceIndexOrganization = {
+  accounts: Record<string, WorkspaceIndexAccount>;
 };
 
 type WorkspaceIndexAccount = {
@@ -302,8 +313,8 @@ export async function listWorkspaceTemplates(auth: AuthConfig, orgID?: string): 
   if (!baseURL) {
     throw new Error('OpenBrain API URL is not configured.');
   }
-  const normalizedOrgID = normalizeOrgID(orgID);
-  const path = normalizedOrgID ? `/v1/orgs/${encodeURIComponent(normalizedOrgID)}/workspace-templates` : '/v1/workspace-templates';
+  const normalizedOrgID = requireBoundOrgID(auth, orgID);
+  const path = `/v1/orgs/${encodeURIComponent(normalizedOrgID)}/workspace-templates`;
   const requestURL = `${baseURL}${path}`;
   const res = await fetch(requestURL, {
     method: 'GET',
@@ -312,7 +323,7 @@ export async function listWorkspaceTemplates(auth: AuthConfig, orgID?: string): 
   const result = await parseJSONResponse<WorkspaceTemplateListResult>(res, requestURL);
   try {
     const connections = await listStorageConnections(auth);
-    return mergeStorageConnectionsIntoTemplates(result, connections, { includeGitHub: !normalizedOrgID });
+    return mergeStorageConnectionsIntoTemplates(result, connections, { includeGitHub: false });
   } catch {
     return result;
   }
@@ -416,8 +427,8 @@ export async function createOpenbrainWorkspace(
   if (!baseURL) {
     throw new Error('OpenBrain API URL is not configured.');
   }
-  const orgID = normalizeOrgID(input.orgID);
-  const path = orgID ? `/v1/orgs/${encodeURIComponent(orgID)}/workspaces` : '/v1/workspaces';
+  const orgID = requireBoundOrgID(auth, input.orgID);
+  const path = `/v1/orgs/${encodeURIComponent(orgID)}/workspaces`;
   const requestURL = `${baseURL}${path}`;
   const res = await fetch(requestURL, {
     method: 'POST',
@@ -431,7 +442,9 @@ export async function createOpenbrainWorkspace(
       name: input.name,
     }),
   });
-  return parseJSONResponse<WorkspaceCreateResult>(res, requestURL);
+  const result = await parseJSONResponse<WorkspaceCreateResult>(res, requestURL);
+  requireBoundOrgID(auth, result.orgID, true);
+  return result;
 }
 
 function normalizeOrgID(raw?: string | null): string | undefined {
@@ -440,6 +453,32 @@ function normalizeOrgID(raw?: string | null): string | undefined {
     return undefined;
   }
   return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value) ? value : undefined;
+}
+
+function requireBoundOrgID(
+  auth: AuthConfig,
+  requestedOrgID?: string | null,
+  requireRequested = false,
+): string {
+  const boundOrgID = normalizeOrgID(auth.orgID);
+  if (!boundOrgID) {
+    throw new Error('tenant_context_required: authenticated organization is missing or invalid');
+  }
+  const requestedRaw = (requestedOrgID || '').trim();
+  if (!requestedRaw) {
+    if (requireRequested) {
+      throw new Error('tenant_context_required: workspace organization is missing');
+    }
+    return boundOrgID;
+  }
+  const requested = normalizeOrgID(requestedRaw);
+  if (!requested) {
+    throw new Error('tenant_context_invalid: workspace organization is invalid');
+  }
+  if (requested !== boundOrgID) {
+    throw new Error('tenant_context_mismatch: workspace organization does not match the authenticated organization');
+  }
+  return boundOrgID;
 }
 
 export async function createLocalIndexWorkspace(
@@ -990,7 +1029,8 @@ async function fetchWorkspaceGitToken(auth: AuthConfig, result: WorkspaceCreateR
   if (!baseURL || !result.orgID || !result.workspaceID) {
     return null;
   }
-  const requestURL = `${baseURL}/v1/orgs/${encodeURIComponent(result.orgID)}/workspaces/${encodeURIComponent(result.workspaceID)}/git-token`;
+  const orgID = requireBoundOrgID(auth, result.orgID, true);
+  const requestURL = `${baseURL}/v1/orgs/${encodeURIComponent(orgID)}/workspaces/${encodeURIComponent(result.workspaceID)}/git-token`;
   const res = await fetch(requestURL, {
     method: 'POST',
     headers: authHeaders(auth),
@@ -1003,7 +1043,8 @@ export async function queueWorkspaceBrainSync(auth: AuthConfig, result: Workspac
   if (!baseURL || !result.orgID || !result.workspaceID) {
     return;
   }
-  const requestURL = `${baseURL}/v1/orgs/${encodeURIComponent(result.orgID)}/workspaces/${encodeURIComponent(result.workspaceID)}/brain/sync`;
+  const orgID = requireBoundOrgID(auth, result.orgID, true);
+  const requestURL = `${baseURL}/v1/orgs/${encodeURIComponent(orgID)}/workspaces/${encodeURIComponent(result.workspaceID)}/brain/sync`;
   const res = await fetch(requestURL, {
     method: 'POST',
     headers: authHeaders(auth),
@@ -1013,11 +1054,11 @@ export async function queueWorkspaceBrainSync(auth: AuthConfig, result: Workspac
 
 export async function archiveWorkspaceBrain(auth: AuthConfig, input: { orgID?: string; workspaceID?: string }): Promise<void> {
   const baseURL = openbrainBaseURL(auth);
-  const orgID = (input.orgID || '').trim();
   const workspaceID = (input.workspaceID || '').trim();
-  if (!baseURL || !orgID || !workspaceID) {
+  if (!baseURL || !input.orgID || !workspaceID) {
     throw new Error('OpenBrain Cloud workspace identity is missing.');
   }
+  const orgID = requireBoundOrgID(auth, input.orgID, true);
   const requestURL = `${baseURL}/v1/orgs/${encodeURIComponent(orgID)}/workspaces/${encodeURIComponent(workspaceID)}/brain/archive`;
   const res = await fetch(requestURL, {
     method: 'POST',
@@ -1031,11 +1072,11 @@ export async function applyWorkspaceBrainSourceAction(
   input: WorkspaceBrainSourceActionInput,
 ): Promise<WorkspaceBrainSourceActionResult> {
   const baseURL = openbrainBaseURL(auth);
-  const orgID = (input.orgID || '').trim();
   const workspaceID = (input.workspaceID || '').trim();
-  if (!baseURL || !orgID || !workspaceID) {
+  if (!baseURL || !input.orgID || !workspaceID) {
     throw new Error('OpenBrain Cloud workspace identity is missing.');
   }
+  const orgID = requireBoundOrgID(auth, input.orgID, true);
   const requestURL = `${baseURL}/v1/orgs/${encodeURIComponent(orgID)}/workspaces/${encodeURIComponent(workspaceID)}/brain/source-action`;
   const res = await fetch(requestURL, {
     method: 'POST',
@@ -1636,76 +1677,139 @@ function workspaceIndexPath(homeDir: string): string {
 }
 
 async function loadWorkspaceIndex(homeDir: string, auth?: AuthConfig | null): Promise<WorkspaceIndexFile> {
+  const deploymentID = (auth?.deploymentID || '').trim();
+  const orgID = (auth?.orgID || '').trim();
   const uid = (auth?.uid || '').trim();
   try {
     const raw = await fs.readFile(workspaceIndexPath(homeDir), 'utf8');
     const parsed = JSON.parse(raw) as Partial<WorkspaceIndexFile>;
-    if (parsed.version !== 2 || !parsed.accounts || !uid) {
-      return createActiveWorkspaceIndex(uid);
+    if (parsed.version !== 3 || !parsed.deployments || !deploymentID || !orgID || !uid) {
+      return createActiveWorkspaceIndex(deploymentID, orgID, uid);
     }
     return activateWorkspaceIndex({
-      version: 2,
-      accounts: parsed.accounts,
+      version: 3,
+      deployments: parsed.deployments,
       workspaces: [],
       hiddenWorkspaces: [],
-    }, uid);
+    }, deploymentID, orgID, uid);
   } catch {
-    return createActiveWorkspaceIndex(uid);
+    return createActiveWorkspaceIndex(deploymentID, orgID, uid);
   }
 }
 
 async function saveWorkspaceIndex(homeDir: string, index: WorkspaceIndexFile): Promise<void> {
   const target = workspaceIndexPath(homeDir);
+  const deploymentID = (index.activeDeploymentID || '').trim();
+  const orgID = (index.activeOrgID || '').trim();
   const uid = (index.activeUID || '').trim();
-  const accounts = { ...(index.accounts || {}) };
-  if (uid) {
+  const deployments = { ...(index.deployments || {}) };
+  if (deploymentID && orgID && uid) {
+    const deployment = deployments[deploymentID] || { organizations: {} };
+    const organizations = { ...(deployment.organizations || {}) };
+    const organization = organizations[orgID] || { accounts: {} };
+    const accounts = { ...(organization.accounts || {}) };
     accounts[uid] = {
       workspaces: sortWorkspaceIndexEntries(index.workspaces || []),
       hiddenWorkspaces: sortHiddenWorkspaceEntries(index.hiddenWorkspaces || []),
     };
+    organizations[orgID] = { accounts };
+    deployments[deploymentID] = { organizations };
   }
-  for (const [accountUID, account] of Object.entries(accounts)) {
-    accounts[accountUID] = {
-      workspaces: sortWorkspaceIndexEntries(account?.workspaces || []),
-      hiddenWorkspaces: sortHiddenWorkspaceEntries(account?.hiddenWorkspaces || []),
-    };
-  }
+  normalizeWorkspaceIndexDeployments(deployments);
   await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(target, `${JSON.stringify({
-    version: 2,
-    accounts,
-  }, null, 2)}\n`, 'utf8');
+  await writeJsonFileAtomic(target, {
+    version: 3,
+    deployments,
+  });
 }
 
-function createActiveWorkspaceIndex(uid: string): WorkspaceIndexFile {
+function createActiveWorkspaceIndex(deploymentID: string, orgID: string, uid: string): WorkspaceIndexFile {
+  const normalizedDeploymentID = deploymentID.trim();
+  const normalizedOrgID = orgID.trim();
   const normalizedUID = uid.trim();
   const index: WorkspaceIndexFile = {
-    version: 2,
-    accounts: {},
+    version: 3,
+    deployments: {},
     workspaces: [],
     hiddenWorkspaces: [],
+    activeDeploymentID: normalizedDeploymentID,
+    activeOrgID: normalizedOrgID,
     activeUID: normalizedUID,
   };
-  if (normalizedUID) {
-    index.accounts![normalizedUID] = { workspaces: [], hiddenWorkspaces: [] };
+  if (normalizedDeploymentID && normalizedOrgID && normalizedUID) {
+    index.deployments[normalizedDeploymentID] = {
+      organizations: {
+        [normalizedOrgID]: {
+          accounts: {
+            [normalizedUID]: { workspaces: [], hiddenWorkspaces: [] },
+          },
+        },
+      },
+    };
   }
   return index;
 }
 
-function activateWorkspaceIndex(index: WorkspaceIndexFile, uid: string): WorkspaceIndexFile {
+function activateWorkspaceIndex(
+  index: WorkspaceIndexFile,
+  deploymentID: string,
+  orgID: string,
+  uid: string,
+): WorkspaceIndexFile {
+  const normalizedDeploymentID = deploymentID.trim();
+  const normalizedOrgID = orgID.trim();
   const normalizedUID = uid.trim();
-  const accounts = { ...(index.accounts || {}) };
+  const deployments = { ...(index.deployments || {}) };
+  const deployment = deployments[normalizedDeploymentID] || { organizations: {} };
+  const organizations = { ...(deployment.organizations || {}) };
+  const organization = organizations[normalizedOrgID] || { accounts: {} };
+  const accounts = { ...(organization.accounts || {}) };
   const account = accounts[normalizedUID] || { workspaces: [], hiddenWorkspaces: [] };
-  if (normalizedUID) {
+  if (normalizedDeploymentID && normalizedOrgID && normalizedUID) {
     accounts[normalizedUID] = account;
+    organizations[normalizedOrgID] = { accounts };
+    deployments[normalizedDeploymentID] = { organizations };
   }
   return {
-    version: 2,
-    accounts,
+    version: 3,
+    deployments,
     workspaces: Array.isArray(account.workspaces) ? [...account.workspaces] : [],
     hiddenWorkspaces: Array.isArray(account.hiddenWorkspaces) ? [...account.hiddenWorkspaces] : [],
+    activeDeploymentID: normalizedDeploymentID,
+    activeOrgID: normalizedOrgID,
     activeUID: normalizedUID,
   };
+}
+
+function normalizeWorkspaceIndexDeployments(
+  deployments: Record<string, WorkspaceIndexDeployment>,
+): void {
+  for (const deployment of Object.values(deployments)) {
+    for (const organization of Object.values(deployment?.organizations || {})) {
+      for (const [uid, account] of Object.entries(organization?.accounts || {})) {
+        organization.accounts[uid] = {
+          workspaces: sortWorkspaceIndexEntries(account?.workspaces || []),
+          hiddenWorkspaces: sortHiddenWorkspaceEntries(account?.hiddenWorkspaces || []),
+        };
+      }
+    }
+  }
+}
+
+function workspaceIndexAccounts(
+  index: WorkspaceIndexFile,
+): Array<{ deploymentID: string; orgID: string; uid: string; account: WorkspaceIndexAccount }> {
+  const result: Array<{ deploymentID: string; orgID: string; uid: string; account: WorkspaceIndexAccount }> = [];
+  for (const [deploymentID, deployment] of Object.entries(index.deployments || {})) {
+    for (const [orgID, organization] of Object.entries(deployment?.organizations || {})) {
+      for (const [uid, account] of Object.entries(organization?.accounts || {})) {
+        if (account) {
+          result.push({ deploymentID, orgID, uid, account });
+        }
+      }
+    }
+  }
+  return result;
 }
 
 function sortWorkspaceIndexEntries(entries: WorkspaceIndexEntry[]): WorkspaceIndexEntry[] {
@@ -1732,29 +1836,46 @@ async function upsertWorkspaceIndex(
   auth?: AuthConfig | null,
   options?: { takeover?: boolean },
 ): Promise<WorkspaceIndexEntry> {
-  if (!(auth?.uid || '').trim()) {
+  const authUID = (auth?.uid || '').trim();
+  const authDeploymentID = (auth?.deploymentID || '').trim();
+  const authOrgID = (auth?.orgID || '').trim();
+  if (!authUID) {
     throw new Error('auth_required: sign in before binding an OpenBrain workspace on this device');
+  }
+  if (!authDeploymentID || !authOrgID) {
+    throw new Error('tenant_context_required: deployment and organization are required');
+  }
+  if (entry.orgID && entry.orgID !== authOrgID && entry.orgID !== 'local') {
+    throw new Error('tenant_context_mismatch: workspace organization does not match the authenticated organization');
   }
   const index = await loadWorkspaceIndex(homeDir, auth);
   const now = new Date().toISOString();
   const existing = index.workspaces.find((item) => item.workspaceID === entry.workspaceID);
   const normalizedPath = normalizeWorkspacePathForIndex(entry.path);
   if (normalizedPath) {
+    const activeDeploymentID = (index.activeDeploymentID || '').trim();
+    const activeOrgID = (index.activeOrgID || '').trim();
     const activeUID = (index.activeUID || '').trim();
-    for (const [uid, account] of Object.entries(index.accounts || {})) {
-      if (!account || uid === activeUID) {
+    for (const owner of workspaceIndexAccounts(index)) {
+      if (
+        owner.deploymentID === activeDeploymentID &&
+        owner.orgID === activeOrgID &&
+        owner.uid === activeUID
+      ) {
         continue;
       }
-      const otherPathEntry = (account.workspaces || []).find((item) =>
+      const otherPathEntry = (owner.account.workspaces || []).find((item) =>
         normalizeWorkspacePathForIndex(item.path) === normalizedPath
       );
       if (!otherPathEntry) {
         continue;
       }
       if (!options?.takeover) {
-        throw new Error(`path_owned_by_other_account: ${entry.path} is already bound to workspace ${otherPathEntry.workspaceID} by account ${uid}`);
+        throw new Error(
+          `path_owned_by_other_tenant: ${entry.path} is already bound to workspace ${otherPathEntry.workspaceID} by ${owner.deploymentID}/${owner.orgID}/${owner.uid}`,
+        );
       }
-      account.workspaces = (account.workspaces || []).filter((item) =>
+      owner.account.workspaces = (owner.account.workspaces || []).filter((item) =>
         normalizeWorkspacePathForIndex(item.path) !== normalizedPath
       );
     }

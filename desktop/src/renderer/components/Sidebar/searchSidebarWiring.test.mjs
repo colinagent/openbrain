@@ -24,7 +24,7 @@ test('Sidebar routes the Marketplace rail item to the existing editor tab comman
 });
 
 test('Sidebar OpenBrain rail shows the local list without opening an editor tab', () => {
-  assert.match(source, /view === 'openbrain'[\s\S]*<OpenBrainSidebar onOpenWorkspace=\{handleOpenBrainWorkspace\} onCreateSource=\{onCreateOpenBrainSource\} \/>/);
+  assert.match(source, /view === 'openbrain'[\s\S]*<OpenBrainSidebar onOpenWorkspace=\{handleOpenBrainWorkspace\} onCreateSource=\{onCreateOpenBrainSource\} onBindSource=\{onBindOpenBrainSource\} \/>/);
   assert.doesNotMatch(source, /openOpenBrainTab\(\)/);
 });
 

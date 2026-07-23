@@ -418,7 +418,10 @@ export async function queryOpenBrain(params: {
   }
   const sourceNames = new Map((sourcesResponse.sources || []).map((source) => [source.workspaceID || source.sourceID, source.name]));
   const workspaceID = (params.input?.workspaceID || '').trim();
-  const workspaceOrgID = (params.input?.orgID || params.auth.activeOrgID || params.auth.defaultOrgID || '').trim();
+  const workspaceOrgID = (params.input?.orgID || params.auth.orgID || '').trim();
+  if (workspaceOrgID !== params.auth.orgID) {
+    throw new Error('Workspace organization must match the token-bound organization.');
+  }
   const endpoint = params.input?.scope === 'workspace' && workspaceID
     ? `/v1/orgs/${encodeURIComponent(workspaceOrgID || 'cloud')}/workspaces/${encodeURIComponent(workspaceID)}/brain/search`
     : '/v1/me/brain/search';
@@ -429,7 +432,7 @@ export async function queryOpenBrain(params: {
     body: JSON.stringify({
       query,
       limit: params.input?.limit,
-      orgID: params.auth.activeOrgID || params.auth.defaultOrgID || undefined,
+      orgID: params.auth.orgID,
       publicOwnerUID: params.input?.publicOwnerUID || undefined,
     }),
   });

@@ -38,26 +38,46 @@ The runtime keeps a local binding index at
 records to local or remote workspace paths used by runtime APIs, storage sync,
 and source recovery.
 
-The index is account-scoped. Version 2 stores entries under the signed-in
-OpenBrain user id:
+The index is tenant-session scoped. Version 3 stores entries under the exact
+deployment, organization, and signed-in OpenBrain user id:
 
 ```json
 {
-  "version": 2,
-  "accounts": {
-    "user-example": {
-      "workspaces": [],
-      "hiddenWorkspaces": []
+  "version": 3,
+  "deployments": {
+    "deployment-example": {
+      "organizations": {
+        "org-example": {
+          "accounts": {
+            "user-example": {
+              "workspaces": [],
+              "hiddenWorkspaces": []
+            }
+          }
+        }
+      }
     }
   }
 }
 ```
 
-Runtime APIs read only the current account bucket from local auth state. When no
-user is signed in, source/cache views and background sync bindings return an
-empty view instead of exposing bindings from another account. If a folder path
-is already bound in a different account bucket, the runtime reports an explicit
-takeover conflict before moving the binding.
+The current local auth file is
+`~/.openbrain/configs/user/auth.json`. Version 2 auth records contain one
+tenant-bound session: `deploymentID`, `orgID`, `uid`, identity and connection
+ids, the authentication method and timestamps, and the bearer token. A tenant
+switch obtains a new server-issued session and rewrites this record; changing
+`orgID` locally is not a valid switch.
+
+Runtime APIs read only the bucket selected by the current
+`deploymentID -> orgID -> uid` tuple. When no complete tenant-bound session is
+present, source/cache views and background sync bindings return an empty view
+instead of exposing bindings from another tenant. Older auth or index shapes
+are rejected rather than inferred or migrated.
+
+If a folder path is already bound in a different tenant bucket, the runtime
+reports an explicit takeover conflict before moving the binding. This namespace
+is a local routing and isolation boundary. It does not transfer ownership of a
+user's local files to an organization.
 
 Related public docs:
 
@@ -410,8 +430,9 @@ latest execution records without reading task configuration files.
 Cloud source listing has two local persistence layers with separate roles:
 
 - `.openbrain/cache/cloud-sources.json` is the last successful full Cloud source
-  snapshot for the signed-in user and active/default org. Desktop may use it for
-  cold-start first paint while it refreshes remote state.
+  snapshot for the signed-in tenant session. Its header includes the exact
+  `deploymentID`, `orgID`, and `uid`; snapshots from another tuple are ignored.
+  Desktop may use it for cold-start first paint while it refreshes remote state.
 - `.openbrain/index/workspaces.json` is the local binding index. It records
   runtime-local paths, repository identity, hidden sources, and binding
   verification state. It is not a complete Cloud source cache.

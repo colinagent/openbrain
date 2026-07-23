@@ -41,18 +41,24 @@ const (
 )
 
 type authConfig struct {
-	Version        int    `json:"version"`
-	BaseURL        string `json:"baseUrl"`
-	Gateway        string `json:"gateway"`
-	AIGateway      string `json:"aiGateway,omitempty"`
-	DefaultOrgID   string `json:"defaultOrgID,omitempty"`
-	DefaultOrgName string `json:"defaultOrgName,omitempty"`
-	Token          string `json:"token"`
-	UID            string `json:"uid"`
-	Email          string `json:"email,omitempty"`
-	ActiveOrgID    string `json:"activeOrgID,omitempty"`
-	ActiveOrgName  string `json:"activeOrgName,omitempty"`
-	UpdatedAt      int64  `json:"updatedAt"`
+	Version      int    `json:"version"`
+	BaseURL      string `json:"baseUrl"`
+	Gateway      string `json:"gateway"`
+	AIGateway    string `json:"aiGateway,omitempty"`
+	Token        string `json:"token"`
+	UID          string `json:"uid"`
+	Email        string `json:"email,omitempty"`
+	DeploymentID string `json:"deploymentID"`
+	OrgID        string `json:"orgID"`
+	OrgSlug      string `json:"orgSlug,omitempty"`
+	OrgName      string `json:"orgName,omitempty"`
+	IdentityID   string `json:"identityID"`
+	ConnectionID string `json:"connectionID"`
+	AuthMethod   string `json:"authMethod"`
+	Assurance    string `json:"assurance,omitempty"`
+	AuthTime     string `json:"authTime"`
+	ExpiresAt    string `json:"expiresAt"`
+	UpdatedAt    int64  `json:"updatedAt"`
 }
 
 type cloudWorkspace struct {
@@ -102,11 +108,21 @@ type cloudSearchResult struct {
 }
 
 type workspaceIndexFile struct {
-	Version          int                               `json:"version"`
-	Accounts         map[string]*workspaceIndexAccount `json:"accounts,omitempty"`
-	Workspaces       []workspaceIndexEntry             `json:"workspaces,omitempty"`
-	HiddenWorkspaces []hiddenWorkspaceEntry            `json:"hiddenWorkspaces,omitempty"`
-	ActiveUID        string                            `json:"-"`
+	Version            int                                  `json:"version"`
+	Deployments        map[string]*workspaceIndexDeployment `json:"deployments"`
+	Workspaces         []workspaceIndexEntry                `json:"workspaces,omitempty"`
+	HiddenWorkspaces   []hiddenWorkspaceEntry               `json:"hiddenWorkspaces,omitempty"`
+	ActiveDeploymentID string                               `json:"-"`
+	ActiveOrgID        string                               `json:"-"`
+	ActiveUID          string                               `json:"-"`
+}
+
+type workspaceIndexDeployment struct {
+	Organizations map[string]*workspaceIndexOrganization `json:"organizations"`
+}
+
+type workspaceIndexOrganization struct {
+	Accounts map[string]*workspaceIndexAccount `json:"accounts"`
 }
 
 type workspaceIndexAccount struct {
@@ -115,12 +131,13 @@ type workspaceIndexAccount struct {
 }
 
 type cloudSourcesSnapshotFile struct {
-	Version   int      `json:"version"`
-	FetchedAt string   `json:"fetchedAt"`
-	UID       string   `json:"uid"`
-	OrgID     string   `json:"orgID,omitempty"`
-	Provider  string   `json:"provider"`
-	Sources   []Source `json:"sources"`
+	Version      int      `json:"version"`
+	FetchedAt    string   `json:"fetchedAt"`
+	DeploymentID string   `json:"deploymentID"`
+	UID          string   `json:"uid"`
+	OrgID        string   `json:"orgID"`
+	Provider     string   `json:"provider"`
+	Sources      []Source `json:"sources"`
 }
 
 type workspaceIndexEntry struct {
@@ -463,14 +480,14 @@ func (s *Service) QueryOpenBrain(ctx context.Context, req QueryRequest) QueryRes
 		}
 	}
 	workspaceID := strings.TrimSpace(req.WorkspaceID)
-	orgID := firstNonEmpty(req.OrgID, auth.ActiveOrgID, auth.DefaultOrgID)
+	if requestedOrgID := strings.TrimSpace(req.OrgID); requestedOrgID != "" && requestedOrgID != strings.TrimSpace(auth.OrgID) {
+		return QueryResponse{Success: false, Code: "tenant_context_mismatch", Error: "Requested organization does not match the authenticated organization.", Provider: "cloud", Results: []QueryResult{}}
+	}
+	orgID := strings.TrimSpace(auth.OrgID)
 	endpoint := "/v1/me/brain/search"
 	if strings.TrimSpace(req.Scope) == "workspace" {
 		if workspaceID == "" {
 			return QueryResponse{Success: false, Code: "invalid_request", Error: "workspaceID is required for workspace scope", Provider: "cloud", Results: []QueryResult{}}
-		}
-		if orgID == "" {
-			orgID = "cloud"
 		}
 		endpoint = "/v1/orgs/" + url.PathEscape(orgID) + "/workspaces/" + url.PathEscape(workspaceID) + "/brain/search"
 	}
@@ -481,7 +498,7 @@ func (s *Service) QueryOpenBrain(ctx context.Context, req QueryRequest) QueryRes
 	body := map[string]interface{}{
 		"query": query,
 		"limit": limit,
-		"orgID": firstNonEmpty(auth.ActiveOrgID, auth.DefaultOrgID),
+		"orgID": auth.OrgID,
 	}
 	if publicOwnerUID := strings.TrimSpace(req.PublicOwnerUID); publicOwnerUID != "" {
 		body["publicOwnerUID"] = publicOwnerUID
@@ -896,8 +913,12 @@ func (s *Service) loadAuth() (authConfig, error) {
 	if err := json.Unmarshal(raw, &auth); err != nil {
 		return auth, err
 	}
-	if strings.TrimSpace(auth.Token) == "" || strings.TrimSpace(auth.UID) == "" {
-		return auth, errors.New("OpenBrain login is required")
+	if auth.Version != 2 || strings.TrimSpace(auth.Token) == "" ||
+		strings.TrimSpace(auth.UID) == "" || strings.TrimSpace(auth.DeploymentID) == "" ||
+		strings.TrimSpace(auth.OrgID) == "" || strings.TrimSpace(auth.IdentityID) == "" ||
+		strings.TrimSpace(auth.ConnectionID) == "" || strings.TrimSpace(auth.AuthMethod) == "" ||
+		strings.TrimSpace(auth.AuthTime) == "" || strings.TrimSpace(auth.ExpiresAt) == "" {
+		return auth, errors.New("tenant-bound OpenBrain login version 2 is required")
 	}
 	return auth, nil
 }
@@ -1260,7 +1281,10 @@ func (s *Service) rollbackCloudWorkspaceCreate(ctx context.Context, auth authCon
 
 func (s *Service) archiveWorkspaceBrain(ctx context.Context, auth authConfig, orgID string, workspaceID string) error {
 	base := strings.TrimRight(auth.gateway(), "/")
-	orgID = firstNonEmpty(orgID, auth.ActiveOrgID, auth.DefaultOrgID)
+	if strings.TrimSpace(orgID) != "" && strings.TrimSpace(orgID) != strings.TrimSpace(auth.OrgID) {
+		return errors.New("workspace organization does not match the authenticated organization")
+	}
+	orgID = strings.TrimSpace(auth.OrgID)
 	workspaceID = strings.TrimSpace(workspaceID)
 	if base == "" || orgID == "" || workspaceID == "" {
 		return errors.New("OpenBrain Cloud workspace identity is missing")
@@ -1283,7 +1307,10 @@ func (s *Service) archiveWorkspaceBrain(ctx context.Context, auth authConfig, or
 func (s *Service) applyWorkspaceBrainSourceAction(ctx context.Context, auth authConfig, orgID string, workspaceID string, action mutationRequest) (sourceActionResult, error) {
 	var result sourceActionResult
 	base := strings.TrimRight(auth.gateway(), "/")
-	orgID = firstNonEmpty(orgID, auth.ActiveOrgID, auth.DefaultOrgID)
+	if strings.TrimSpace(orgID) != "" && strings.TrimSpace(orgID) != strings.TrimSpace(auth.OrgID) {
+		return result, errors.New("workspace organization does not match the authenticated organization")
+	}
+	orgID = strings.TrimSpace(auth.OrgID)
 	workspaceID = strings.TrimSpace(workspaceID)
 	if base == "" || orgID == "" || workspaceID == "" {
 		return result, errors.New("OpenBrain Cloud workspace identity is missing")
@@ -1317,61 +1344,62 @@ func (s *Service) applyWorkspaceBrainSourceAction(ctx context.Context, auth auth
 }
 
 func (s *Service) loadWorkspaceIndex(auth authConfig, visible []cloudWorkspace, visibleKnown bool) (workspaceIndexFile, error) {
+	_ = visible
+	_ = visibleKnown
+	deploymentID := strings.TrimSpace(auth.DeploymentID)
+	orgID := strings.TrimSpace(auth.OrgID)
 	uid := strings.TrimSpace(auth.UID)
-	if uid == "" {
-		return workspaceIndexFile{Version: 2, Accounts: map[string]*workspaceIndexAccount{}}, nil
+	if deploymentID == "" || orgID == "" || uid == "" {
+		return newWorkspaceIndex(deploymentID, orgID, uid), nil
 	}
 	var index workspaceIndexFile
 	target := s.workspaceIndexPath()
 	raw, err := os.ReadFile(target)
 	if err != nil {
 		if os.IsNotExist(err) {
-			index = workspaceIndexFile{Version: 2, Accounts: map[string]*workspaceIndexAccount{}, ActiveUID: uid}
-			index.activate(uid)
-			return index, nil
+			return newWorkspaceIndex(deploymentID, orgID, uid), nil
 		}
 		return index, err
 	}
 	if err := json.Unmarshal(raw, &index); err != nil {
 		return index, err
 	}
-	if index.Version == 2 && index.Accounts != nil {
-		index.ActiveUID = uid
-		index.activate(uid)
-		return index, nil
+	if index.Version != 3 || index.Deployments == nil {
+		return newWorkspaceIndex(deploymentID, orgID, uid), nil
 	}
-	if !visibleKnown {
-		index = workspaceIndexFile{Version: 2, Accounts: map[string]*workspaceIndexAccount{}, ActiveUID: uid}
-		index.activate(uid)
-		return index, nil
-	}
-	migrated := migrateLegacyWorkspaceIndex(uid, index, visible)
-	if err := backupWorkspaceIndexFile(target, raw); err != nil {
-		return index, err
-	}
-	if err := s.saveWorkspaceIndex(migrated); err != nil {
-		return index, err
-	}
-	index = migrated
+	index.activate(deploymentID, orgID, uid)
 	return index, nil
 }
 
 func (s *Service) saveWorkspaceIndex(index workspaceIndexFile) error {
-	index.Version = 2
-	if index.Accounts == nil {
-		index.Accounts = map[string]*workspaceIndexAccount{}
+	index.Version = 3
+	if index.Deployments == nil {
+		index.Deployments = map[string]*workspaceIndexDeployment{}
 	}
-	if uid := strings.TrimSpace(index.ActiveUID); uid != "" {
-		account := index.ensureAccount(uid)
+	deploymentID := strings.TrimSpace(index.ActiveDeploymentID)
+	orgID := strings.TrimSpace(index.ActiveOrgID)
+	uid := strings.TrimSpace(index.ActiveUID)
+	if deploymentID != "" && orgID != "" && uid != "" {
+		account := index.ensureAccount(deploymentID, orgID, uid)
 		account.Workspaces = sortedWorkspaceEntries(index.Workspaces)
 		account.HiddenWorkspaces = sortedHiddenWorkspaceEntries(index.HiddenWorkspaces)
 	}
-	for _, account := range index.Accounts {
-		if account == nil {
+	for _, deployment := range index.Deployments {
+		if deployment == nil {
 			continue
 		}
-		account.Workspaces = sortedWorkspaceEntries(account.Workspaces)
-		account.HiddenWorkspaces = sortedHiddenWorkspaceEntries(account.HiddenWorkspaces)
+		for _, organization := range deployment.Organizations {
+			if organization == nil {
+				continue
+			}
+			for _, account := range organization.Accounts {
+				if account == nil {
+					continue
+				}
+				account.Workspaces = sortedWorkspaceEntries(account.Workspaces)
+				account.HiddenWorkspaces = sortedHiddenWorkspaceEntries(account.HiddenWorkspaces)
+			}
+		}
 	}
 	index.Workspaces = nil
 	index.HiddenWorkspaces = nil
@@ -1380,97 +1408,96 @@ func (s *Service) saveWorkspaceIndex(index workspaceIndexFile) error {
 		return err
 	}
 	target := s.workspaceIndexPath()
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(target, append(raw, '\n'), 0o644)
+	return writePrivateFileAtomic(target, append(raw, '\n'))
 }
 
-func migrateLegacyWorkspaceIndex(uid string, legacy workspaceIndexFile, visible []cloudWorkspace) workspaceIndexFile {
-	visibleKeys := map[string]struct{}{}
-	for _, workspace := range visible {
-		key := workspaceIdentityStorageKey(strings.TrimSpace(workspace.ID), strings.TrimSpace(workspace.OrgID))
-		if key != "" {
-			visibleKeys[key] = struct{}{}
-		}
-	}
-	account := &workspaceIndexAccount{}
-	seen := map[string]struct{}{}
-	for _, entry := range legacy.Workspaces {
-		key := workspaceIdentityStorageKey(strings.TrimSpace(entry.WorkspaceID), strings.TrimSpace(entry.OrgID))
-		if key == "" {
-			continue
-		}
-		if _, ok := visibleKeys[key]; !ok && !legacyWorkspaceVisibleByRepository(entry, visible) {
-			continue
-		}
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		account.Workspaces = append(account.Workspaces, entry)
-	}
-	for _, entry := range legacy.HiddenWorkspaces {
-		key := workspaceIdentityStorageKey(strings.TrimSpace(entry.WorkspaceID), strings.TrimSpace(entry.OrgID))
-		if key == "" {
-			continue
-		}
-		if _, ok := visibleKeys[key]; ok {
-			account.HiddenWorkspaces = appendHidden(account.HiddenWorkspaces, entry.WorkspaceID, entry.OrgID, firstNonEmpty(entry.HiddenAt, time.Now().UTC().Format(time.RFC3339)))
-		}
-	}
-	index := workspaceIndexFile{
-		Version:   2,
-		ActiveUID: uid,
-		Accounts: map[string]*workspaceIndexAccount{
-			uid: account,
-		},
-	}
-	index.activate(uid)
+func newWorkspaceIndex(deploymentID string, orgID string, uid string) workspaceIndexFile {
+	index := workspaceIndexFile{Version: 3, Deployments: map[string]*workspaceIndexDeployment{}}
+	index.activate(deploymentID, orgID, uid)
 	return index
 }
 
-func legacyWorkspaceVisibleByRepository(entry workspaceIndexEntry, visible []cloudWorkspace) bool {
-	for _, workspace := range visible {
-		if workspaceIndexRepositoryMatchesCloudWorkspace(entry, workspace) {
-			return true
-		}
-	}
-	return false
-}
-
-func backupWorkspaceIndexFile(target string, raw []byte) error {
-	backup := target + ".bak-" + time.Now().UTC().Format("20060102T150405Z")
-	return os.WriteFile(backup, raw, 0o600)
-}
-
-func (index *workspaceIndexFile) activate(uid string) {
+func (index *workspaceIndexFile) activate(deploymentID string, orgID string, uid string) {
+	deploymentID = strings.TrimSpace(deploymentID)
+	orgID = strings.TrimSpace(orgID)
 	uid = strings.TrimSpace(uid)
+	index.ActiveDeploymentID = deploymentID
+	index.ActiveOrgID = orgID
 	index.ActiveUID = uid
-	if index.Accounts == nil {
-		index.Accounts = map[string]*workspaceIndexAccount{}
+	if index.Deployments == nil {
+		index.Deployments = map[string]*workspaceIndexDeployment{}
 	}
-	if uid == "" {
+	if deploymentID == "" || orgID == "" || uid == "" {
 		index.Workspaces = nil
 		index.HiddenWorkspaces = nil
 		return
 	}
-	account := index.ensureAccount(uid)
+	account := index.ensureAccount(deploymentID, orgID, uid)
 	index.Workspaces = append([]workspaceIndexEntry(nil), account.Workspaces...)
 	index.HiddenWorkspaces = append([]hiddenWorkspaceEntry(nil), account.HiddenWorkspaces...)
 }
 
-func (index *workspaceIndexFile) ensureAccount(uid string) *workspaceIndexAccount {
+func (index *workspaceIndexFile) ensureAccount(deploymentID string, orgID string, uid string) *workspaceIndexAccount {
+	deploymentID = strings.TrimSpace(deploymentID)
+	orgID = strings.TrimSpace(orgID)
 	uid = strings.TrimSpace(uid)
-	if index.Accounts == nil {
-		index.Accounts = map[string]*workspaceIndexAccount{}
+	if index.Deployments == nil {
+		index.Deployments = map[string]*workspaceIndexDeployment{}
 	}
-	account := index.Accounts[uid]
+	deployment := index.Deployments[deploymentID]
+	if deployment == nil {
+		deployment = &workspaceIndexDeployment{Organizations: map[string]*workspaceIndexOrganization{}}
+		index.Deployments[deploymentID] = deployment
+	}
+	if deployment.Organizations == nil {
+		deployment.Organizations = map[string]*workspaceIndexOrganization{}
+	}
+	organization := deployment.Organizations[orgID]
+	if organization == nil {
+		organization = &workspaceIndexOrganization{Accounts: map[string]*workspaceIndexAccount{}}
+		deployment.Organizations[orgID] = organization
+	}
+	if organization.Accounts == nil {
+		organization.Accounts = map[string]*workspaceIndexAccount{}
+	}
+	account := organization.Accounts[uid]
 	if account == nil {
 		account = &workspaceIndexAccount{}
-		index.Accounts[uid] = account
+		organization.Accounts[uid] = account
 	}
 	return account
+}
+
+type workspaceIndexAccountOwner struct {
+	DeploymentID string
+	OrgID        string
+	UID          string
+	Account      *workspaceIndexAccount
+}
+
+func (index *workspaceIndexFile) allAccounts() []workspaceIndexAccountOwner {
+	owners := make([]workspaceIndexAccountOwner, 0)
+	for deploymentID, deployment := range index.Deployments {
+		if deployment == nil {
+			continue
+		}
+		for orgID, organization := range deployment.Organizations {
+			if organization == nil {
+				continue
+			}
+			for uid, account := range organization.Accounts {
+				if account != nil {
+					owners = append(owners, workspaceIndexAccountOwner{
+						DeploymentID: deploymentID,
+						OrgID:        orgID,
+						UID:          uid,
+						Account:      account,
+					})
+				}
+			}
+		}
+	}
+	return owners
 }
 
 func sortedWorkspaceEntries(entries []workspaceIndexEntry) []workspaceIndexEntry {
@@ -1520,14 +1547,17 @@ func (s *Service) cloudSourcesSnapshotPath() string {
 }
 
 func cloudSourcesSnapshotOrgID(auth authConfig) string {
-	return firstNonEmpty(auth.ActiveOrgID, auth.DefaultOrgID)
+	return strings.TrimSpace(auth.OrgID)
 }
 
 func cloudSourcesSnapshotMatchesAuth(snapshot cloudSourcesSnapshotFile, auth authConfig) bool {
-	return snapshot.Version == 1 &&
+	return snapshot.Version == 2 &&
 		strings.TrimSpace(snapshot.Provider) == "cloud" &&
+		strings.TrimSpace(snapshot.DeploymentID) != "" &&
+		strings.TrimSpace(snapshot.DeploymentID) == strings.TrimSpace(auth.DeploymentID) &&
 		strings.TrimSpace(snapshot.UID) != "" &&
 		strings.TrimSpace(snapshot.UID) == strings.TrimSpace(auth.UID) &&
+		strings.TrimSpace(snapshot.OrgID) != "" &&
 		strings.TrimSpace(snapshot.OrgID) == cloudSourcesSnapshotOrgID(auth)
 }
 
@@ -1548,12 +1578,13 @@ func (s *Service) loadCloudSourcesSnapshot() (cloudSourcesSnapshotFile, error) {
 
 func (s *Service) saveCloudSourcesSnapshot(auth authConfig, sources []Source) error {
 	snapshot := cloudSourcesSnapshotFile{
-		Version:   1,
-		FetchedAt: time.Now().UTC().Format(time.RFC3339),
-		UID:       strings.TrimSpace(auth.UID),
-		OrgID:     cloudSourcesSnapshotOrgID(auth),
-		Provider:  "cloud",
-		Sources:   append([]Source(nil), sources...),
+		Version:      2,
+		FetchedAt:    time.Now().UTC().Format(time.RFC3339),
+		DeploymentID: strings.TrimSpace(auth.DeploymentID),
+		UID:          strings.TrimSpace(auth.UID),
+		OrgID:        cloudSourcesSnapshotOrgID(auth),
+		Provider:     "cloud",
+		Sources:      append([]Source(nil), sources...),
 	}
 	sortSourcesByName(snapshot.Sources)
 	return s.saveCloudSourcesSnapshotFile(snapshot)
@@ -1561,7 +1592,7 @@ func (s *Service) saveCloudSourcesSnapshot(auth authConfig, sources []Source) er
 
 func (s *Service) saveCloudSourcesSnapshotFile(snapshot cloudSourcesSnapshotFile) error {
 	if snapshot.Version == 0 {
-		snapshot.Version = 1
+		snapshot.Version = 2
 	}
 	if strings.TrimSpace(snapshot.Provider) == "" {
 		snapshot.Provider = "cloud"
@@ -1575,10 +1606,38 @@ func (s *Service) saveCloudSourcesSnapshotFile(snapshot cloudSourcesSnapshotFile
 		return err
 	}
 	target := s.cloudSourcesSnapshotPath()
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	return writePrivateFileAtomic(target, append(raw, '\n'))
+}
+
+func writePrivateFileAtomic(target string, content []byte) error {
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(target, append(raw, '\n'), 0o644)
+	tmp, err := os.CreateTemp(filepath.Dir(target), filepath.Base(target)+"-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, target); err != nil {
+		return err
+	}
+	return os.Chmod(target, 0o600)
 }
 
 func (s *Service) updateCloudSourcesSnapshot(auth authConfig, update func([]Source) []Source) {
@@ -1771,14 +1830,13 @@ func (s *Service) upsertCloudWorkspaceIndex(auth authConfig, workspace createWor
 	entryWorkspaceID := strings.TrimSpace(entry.WorkspaceID)
 	entryPath := cleanPath(entry.Path)
 	if entryPath != "" {
-		for uid, account := range index.Accounts {
-			if account == nil {
-				continue
-			}
-			nextAccountEntries := account.Workspaces[:0]
-			for _, existing := range account.Workspaces {
+		for _, owner := range index.allAccounts() {
+			nextAccountEntries := owner.Account.Workspaces[:0]
+			for _, existing := range owner.Account.Workspaces {
 				samePath := cleanPath(existing.Path) == entryPath
-				if uid == activeUID {
+				if owner.DeploymentID == strings.TrimSpace(auth.DeploymentID) &&
+					owner.OrgID == strings.TrimSpace(auth.OrgID) &&
+					owner.UID == activeUID {
 					nextAccountEntries = append(nextAccountEntries, existing)
 					continue
 				}
@@ -1786,7 +1844,7 @@ func (s *Service) upsertCloudWorkspaceIndex(auth authConfig, workspace createWor
 					if !takeover {
 						return workspaceIndexEntry{}, &workspacePathOwnerError{
 							path:        entry.Path,
-							ownerUID:    uid,
+							ownerUID:    owner.UID,
 							workspaceID: strings.TrimSpace(existing.WorkspaceID),
 						}
 					}
@@ -1794,7 +1852,7 @@ func (s *Service) upsertCloudWorkspaceIndex(auth authConfig, workspace createWor
 				}
 				nextAccountEntries = append(nextAccountEntries, existing)
 			}
-			account.Workspaces = nextAccountEntries
+			owner.Account.Workspaces = nextAccountEntries
 		}
 	}
 	next := make([]workspaceIndexEntry, 0, len(index.Workspaces)+1)

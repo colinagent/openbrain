@@ -34,7 +34,7 @@ const { parseAuthCallbackUrl, getLoginUrl } = module.exports;
 
 test('parses openbrain hash auth callback from the web app', () => {
   const parsed = parseAuthCallbackUrl(
-    'openbrain://auth/callback#token=t-123&uid=u-123&email=ShadowFlow123123%40GMAIL.com&baseUrl=https%3A%2F%2Fapp.openbrain.chat&gateway=https%3A%2F%2Fapi.op-agent.com&defaultOrgID=cloud&defaultOrgName=Cloud'
+    'openbrain://auth/callback#token=t-123&uid=u-123&email=ShadowFlow123123%40GMAIL.com&baseUrl=https%3A%2F%2Fapp.openbrain.chat&gateway=https%3A%2F%2Fapi.op-agent.com&deploymentId=dep-saas&orgId=org-acme&identityId=idn-123&connectionId=conn-123&authMethod=email&assurance=mfa&authTime=2026-07-23T00%3A00%3A00Z&expiresAt=2026-07-24T00%3A00%3A00Z'
   );
   assert.equal(parsed?.token, 't-123');
   assert.equal(parsed?.uid, 'u-123');
@@ -42,17 +42,32 @@ test('parses openbrain hash auth callback from the web app', () => {
   assert.equal(parsed?.baseUrl, 'https://app.openbrain.chat');
   assert.equal(parsed?.gateway, 'https://api.op-agent.com');
   assert.equal(parsed?.aiGateway, undefined);
-  assert.equal(parsed?.defaultOrgID, 'cloud');
-  assert.equal(parsed?.defaultOrgName, 'Cloud');
+  assert.equal(parsed?.deploymentID, 'dep-saas');
+  assert.equal(parsed?.orgID, 'org-acme');
+  assert.equal(parsed?.identityID, 'idn-123');
+  assert.equal(parsed?.connectionID, 'conn-123');
+  assert.equal(parsed?.authMethod, 'email');
+  assert.equal(parsed?.assurance, 'mfa');
+  assert.equal(parsed?.authTime, '2026-07-23T00:00:00Z');
+  assert.equal(parsed?.expiresAt, '2026-07-24T00:00:00Z');
 });
 
 test('parses openbrain query auth callback fallback', () => {
   const parsed = parseAuthCallbackUrl(
-    'openbrain://auth/callback?token=t-456&uid=u-456&email=user%40example.com'
+    'openbrain://auth/callback?token=t-456&uid=u-456&email=user%40example.com&deploymentId=dep-private&orgId=org-team&identityId=idn-456&connectionId=conn-456&authMethod=oidc&authTime=2026-07-23T01%3A00%3A00Z&expiresAt=2026-07-23T09%3A00%3A00Z'
   );
   assert.equal(parsed?.token, 't-456');
   assert.equal(parsed?.uid, 'u-456');
   assert.equal(parsed?.email, 'user@example.com');
+  assert.equal(parsed?.deploymentID, 'dep-private');
+  assert.equal(parsed?.orgID, 'org-team');
+});
+
+test('rejects callbacks without tenant-bound session context', () => {
+  const parsed = parseAuthCallbackUrl(
+    'openbrain://auth/callback?token=t-456&uid=u-456&email=user%40example.com'
+  );
+  assert.equal(parsed, null);
 });
 
 test('rejects legacy opagent auth callback URLs', () => {

@@ -60,31 +60,32 @@ func TestLoadEligibleWorkspacesOnlyCurrentAccount(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	raw := []byte(`{
-		"version": 2,
-		"accounts": {
-			"other-user": {
-				"workspaces": [{
-					"workspaceID": "other",
-					"orgID": "org",
-					"localName": "Other",
-					"path": "/tmp/other",
-					"storage": {"enabled": true, "backend": "git", "provider": "github", "syncPolicy": {"autoSync": true, "intervalSec": 300}},
-					"syncPolicy": {"autoSync": true, "intervalSec": 300}
-				}]
+	raw, err := json.Marshal(workspaceIndexFile{
+		Version: 3,
+		Deployments: map[string]*workspaceIndexDeployment{
+			"dep-test": {
+				Organizations: map[string]*workspaceIndexOrganization{
+					"org": {
+						Accounts: map[string]*workspaceIndexAccount{
+							"other-user": {Workspaces: []workspaceEntry{{
+								WorkspaceID: "other", OrgID: "org", LocalName: "Other", Path: "/tmp/other",
+								Storage:    &workspaceStorageBinding{Enabled: true, Backend: "git", Provider: "github", SyncPolicy: workspaceSyncPolicy{AutoSync: true, IntervalSec: 300}},
+								SyncPolicy: workspaceSyncPolicy{AutoSync: true, IntervalSec: 300},
+							}}},
+							"user": {Workspaces: []workspaceEntry{{
+								WorkspaceID: "current", OrgID: "org", LocalName: "Current", Path: "/tmp/current",
+								Storage:    &workspaceStorageBinding{Enabled: true, Backend: "git", Provider: "github", SyncPolicy: workspaceSyncPolicy{AutoSync: true, IntervalSec: 300}},
+								SyncPolicy: workspaceSyncPolicy{AutoSync: true, IntervalSec: 300},
+							}}},
+						},
+					},
+				},
 			},
-			"user": {
-				"workspaces": [{
-					"workspaceID": "current",
-					"orgID": "org",
-					"localName": "Current",
-					"path": "/tmp/current",
-					"storage": {"enabled": true, "backend": "git", "provider": "github", "syncPolicy": {"autoSync": true, "intervalSec": 300}},
-					"syncPolicy": {"autoSync": true, "intervalSec": 300}
-				}]
-			}
-		}
-	}`)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, raw, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -269,9 +270,17 @@ func writeTestIndex(t *testing.T, entries []workspaceEntry) {
 		t.Fatal(err)
 	}
 	raw, err := json.Marshal(workspaceIndexFile{
-		Version: 2,
-		Accounts: map[string]*workspaceIndexAccount{
-			"user": &workspaceIndexAccount{Workspaces: entries},
+		Version: 3,
+		Deployments: map[string]*workspaceIndexDeployment{
+			"dep-test": {
+				Organizations: map[string]*workspaceIndexOrganization{
+					"org": {
+						Accounts: map[string]*workspaceIndexAccount{
+							"user": {Workspaces: entries},
+						},
+					},
+				},
+			},
 		},
 	})
 	if err != nil {
@@ -288,7 +297,12 @@ func writeTestAuth(t *testing.T, gateway string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := json.Marshal(authConfig{Gateway: gateway, Token: "session-token", UID: "user"})
+	raw, err := json.Marshal(authConfig{
+		Version: 2, Gateway: gateway, Token: "session-token", UID: "user",
+		DeploymentID: "dep-test", OrgID: "org", IdentityID: "idn-test",
+		ConnectionID: "conn-test", AuthMethod: "email",
+		AuthTime: "2026-07-23T00:00:00Z", ExpiresAt: "2026-07-24T00:00:00Z",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

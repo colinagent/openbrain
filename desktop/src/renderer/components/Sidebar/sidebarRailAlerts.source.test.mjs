@@ -37,8 +37,18 @@ test('sidebar aggregates rail alerts through useSidebarRailAlerts', () => {
   assert.match(alertsSource, /export type SidebarRailAlertMap/);
 });
 
-test('formatSidebarRailAlertCount caps display at ninety-nine plus', async () => {
-  const { formatSidebarRailAlertCount } = await import('./sidebarRailAlerts.ts');
+test('formatSidebarRailAlertCount caps display at ninety-nine plus', () => {
+  const alertsSource = read('./sidebarRailAlerts.ts');
+  const functionSource = alertsSource.match(
+    /export function formatSidebarRailAlertCount\(count: number\): string \{[\s\S]*?\n\}/,
+  );
+  assert.ok(functionSource);
+  const executableSource = functionSource[0]
+    .replace('export ', '')
+    .replace('(count: number): string', '(count)');
+  const formatSidebarRailAlertCount = Function(
+    `"use strict"; ${executableSource}; return formatSidebarRailAlertCount;`,
+  )();
 
   assert.equal(formatSidebarRailAlertCount(0), '0');
   assert.equal(formatSidebarRailAlertCount(1), '1');

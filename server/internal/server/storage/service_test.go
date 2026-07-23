@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -220,9 +221,13 @@ func TestCronBindingsOnlyReadsCurrentAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	rawIndex := `{
-		"version": 2,
-		"accounts": {
-			"user-alice": {
+		"version": 3,
+		"deployments": {
+		  "dep-test": {
+		    "organizations": {
+		      "org-test": {
+		        "accounts": {
+			      "user-alice": {
 				"workspaces": [{
 					"workspaceID": "ws-alice",
 					"localName": "Alice",
@@ -230,14 +235,18 @@ func TestCronBindingsOnlyReadsCurrentAccount(t *testing.T) {
 					"storage": {"enabled": true, "backend": "git", "provider": "github", "remoteURL": "https://github.com/example/alice.git", "syncPolicy": {"autoSync": true, "intervalSec": 300}}
 				}]
 			},
-			"user-bob": {
+			      "user-bob": {
 				"workspaces": [{
 					"workspaceID": "ws-bob",
 					"localName": "Bob",
 					"path": "/tmp/bob",
 					"storage": {"enabled": true, "backend": "git", "provider": "github", "remoteURL": "https://github.com/example/bob.git", "syncPolicy": {"autoSync": true, "intervalSec": 300}}
 				}]
-			}
+			      }
+		        }
+		      }
+		    }
+		  }
 		}
 	}`
 	if err := os.WriteFile(indexPath, []byte(rawIndex), 0o644); err != nil {
@@ -253,9 +262,94 @@ func TestCronBindingsOnlyReadsCurrentAccount(t *testing.T) {
 	}
 }
 
+func TestCronBindingsScopesSameUIDByDeploymentAndOrganization(t *testing.T) {
+	home := t.TempDir()
+	svc := &Service{homeDir: home}
+	indexPath := svc.indexPath()
+	if err := os.MkdirAll(filepath.Dir(indexPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rawIndex := `{
+		"version": 3,
+		"deployments": {
+			"dep-a": {
+				"organizations": {
+					"org-a": {"accounts": {"user-same": {"workspaces": [{
+						"workspaceID": "ws-dep-a-org-a",
+						"orgID": "org-a",
+						"localName": "A",
+						"path": "/tmp/dep-a-org-a",
+						"storage": {"enabled": true, "backend": "git", "provider": "github", "remoteURL": "https://github.com/example/a.git", "syncPolicy": {"autoSync": true, "intervalSec": 300}}
+					}]}}},
+					"org-b": {"accounts": {"user-same": {"workspaces": [{
+						"workspaceID": "ws-dep-a-org-b",
+						"orgID": "org-b",
+						"localName": "B",
+						"path": "/tmp/dep-a-org-b",
+						"storage": {"enabled": true, "backend": "git", "provider": "github", "remoteURL": "https://github.com/example/b.git", "syncPolicy": {"autoSync": true, "intervalSec": 300}}
+					}]}}}
+				}
+			},
+			"dep-b": {
+				"organizations": {
+					"org-a": {"accounts": {"user-same": {"workspaces": [{
+						"workspaceID": "ws-dep-b-org-a",
+						"orgID": "org-a",
+						"localName": "C",
+						"path": "/tmp/dep-b-org-a",
+						"storage": {"enabled": true, "backend": "git", "provider": "github", "remoteURL": "https://github.com/example/c.git", "syncPolicy": {"autoSync": true, "intervalSec": 300}}
+					}]}}}
+				}
+			}
+		}
+	}`
+	if err := os.WriteFile(indexPath, []byte(rawIndex), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		deploymentID string
+		orgID        string
+		want         string
+	}{
+		{deploymentID: "dep-a", orgID: "org-a", want: "ws-dep-a-org-a"},
+		{deploymentID: "dep-a", orgID: "org-b", want: "ws-dep-a-org-b"},
+		{deploymentID: "dep-b", orgID: "org-a", want: "ws-dep-b-org-a"},
+	} {
+		writeTestAuthContext(t, home, "user-same", test.deploymentID, test.orgID)
+		bindings, err := svc.CronBindings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(bindings) != 1 || bindings[0].WorkspaceID != test.want {
+			t.Fatalf("%s/%s should only read %s, got %+v", test.deploymentID, test.orgID, test.want, bindings)
+		}
+	}
+}
+
 func writeTestIndex(t *testing.T, svc *Service, entry workspaceEntry) {
 	t.Helper()
 	writeTestIndexFile(t, svc, []workspaceEntry{entry})
+}
+
+func TestWriteJSONAtomicUsesPrivateFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX file modes")
+	}
+	target := filepath.Join(t.TempDir(), "workspaces.json")
+	if err := os.WriteFile(target, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeJSONAtomic(target, map[string]any{"version": 3}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("workspace index mode = %o, want 600", got)
+	}
 }
 
 func writeTestIndexFile(t *testing.T, svc *Service, entries []workspaceEntry) {
@@ -266,18 +360,23 @@ func writeTestIndexFile(t *testing.T, svc *Service, entries []workspaceEntry) {
 		entries[i].UpdatedAt = now
 	}
 	writeTestAuth(t, svc.homeDir, "user-bob")
-	if err := svc.saveIndex(&workspaceIndexFile{Version: 2, Workspaces: entries}); err != nil {
+	if err := svc.saveIndex(&workspaceIndexFile{Version: 3, Workspaces: entries}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func writeTestAuth(t *testing.T, home string, uid string) {
 	t.Helper()
+	writeTestAuthContext(t, home, uid, "dep-test", "org-test")
+}
+
+func writeTestAuthContext(t *testing.T, home string, uid string, deploymentID string, orgID string) {
+	t.Helper()
 	authDir := filepath.Join(home, ".openbrain", "configs", "user")
 	if err := os.MkdirAll(authDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	raw := `{"version":1,"gateway":"http://127.0.0.1.invalid","token":"session-token","uid":"` + uid + `","defaultOrgID":"cloud","updatedAt":1}`
+	raw := `{"version":2,"gateway":"http://127.0.0.1.invalid","token":"session-token","uid":"` + uid + `","deploymentID":"` + deploymentID + `","orgID":"` + orgID + `","identityID":"idn-test","connectionID":"conn-test","authMethod":"email","authTime":"2026-07-23T00:00:00Z","expiresAt":"2026-07-24T00:00:00Z","updatedAt":1}`
 	if err := os.WriteFile(filepath.Join(authDir, "auth.json"), []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -501,6 +501,63 @@ test('mergeOpenBrainOrgCatalogs preserves custom provider default over active or
   assert.ok(merged.models.find((entry) => entry.key === 'acme:gpt-5.4'));
 });
 
+test('mergeOpenBrainOrgCatalogs removes stale managed organizations after a tenant switch', () => {
+  const merged = mergeOpenBrainOrgCatalogs(
+    normalizeModelsConfig({
+      version: 5,
+      defaultModelKey: 'org-a:gpt-a',
+      providers: {
+        'org-a': {
+          label: 'Org A',
+          managed: true,
+          models: [
+            {
+              id: 'gpt-a',
+              enabled: true,
+              api: 'openai-responses',
+            },
+          ],
+        },
+        'local-openai': {
+          label: 'Local OpenAI',
+          api: 'openai-responses',
+          baseUrl: 'https://api.openai.com/v1',
+          apiKey: 'local-key',
+          models: [
+            {
+              id: 'gpt-local',
+              enabled: true,
+            },
+          ],
+        },
+      },
+      updatedAt: 0,
+    } as never),
+    [
+      {
+        providerKey: 'org-b',
+        providerLabel: 'Org B',
+        models: [
+          {
+            id: 'gpt-b',
+            api: 'openai-responses',
+            reasoning: false,
+          },
+        ],
+      },
+    ],
+    1,
+    { activeOrgID: 'org-b' },
+  );
+
+  assert.deepEqual(Object.keys(merged.providers).sort(), ['local-openai', 'org-b']);
+  assert.deepEqual(merged.models.map((model) => model.key).sort(), ['local-openai:gpt-local', 'org-b:gpt-b']);
+  assert.equal(merged.defaultModelKey, 'org-b:gpt-b');
+  assert.equal(merged.providers['org-b'].managed, true);
+  assert.equal(merged.providers['org-a'], undefined);
+  assert.doesNotThrow(() => normalizeModelsConfig(merged));
+});
+
 test('mergeOpenBrainOrgCatalogs builds bare org provider keys from short remote model ids', () => {
   const merged = mergeOpenBrainOrgCatalogs(
     normalizeModelsConfig({
@@ -619,7 +676,7 @@ test('normalizeModelsConfig preserves upstream-namespaced ids for custom provide
   assert.equal(config.models[0]?.id, 'openai/gpt-5.5');
 });
 
-test('mergeOpenBrainOrgCatalogs privateOnly keeps only the active managed provider', () => {
+test('mergeOpenBrainOrgCatalogs privateOnly preserves runtime-local providers', () => {
   const merged = mergeOpenBrainOrgCatalogs(
     normalizeModelsConfig({
       version: 5,
@@ -681,8 +738,11 @@ test('mergeOpenBrainOrgCatalogs privateOnly keeps only the active managed provid
     { activeOrgID: 'cloud', privateOnly: true },
   );
 
-  assert.deepEqual(Object.keys(merged.providers), ['cloud']);
-  assert.deepEqual(merged.models.map((model) => model.key), ['cloud:MiniMax-M2.7-highspeed']);
+  assert.deepEqual(Object.keys(merged.providers).sort(), ['cloud', 'local-openai']);
+  assert.deepEqual(
+    merged.models.map((model) => model.key).sort(),
+    ['cloud:MiniMax-M2.7-highspeed', 'local-openai:gpt-5.4'],
+  );
   assert.equal(merged.defaultModelKey, 'cloud:MiniMax-M2.7-highspeed');
   assert.equal(merged.strategies, undefined);
 });

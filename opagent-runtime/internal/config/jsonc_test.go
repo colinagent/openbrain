@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/colinagent/openbrain/opagent-protocol/go-sdk/op"
@@ -73,7 +74,7 @@ func TestLoadLocalUserConfigAllowsComments(t *testing.T) {
   }
 }`
 
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(authJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
 		t.Fatalf("write auth.json: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
@@ -101,4 +102,22 @@ func TestLoadLocalUserConfigAllowsComments(t *testing.T) {
 	if node.ID != "agent-jsonc" || node.Kind != string(op.NodeKindAgent) || node.HostID != "host-jsonc" {
 		t.Fatalf("node = %#v", node)
 	}
+}
+
+func tenantBoundAuthFixture(raw string) string {
+	raw = strings.Replace(raw, `"version": 1`, `"version": 2`, 1)
+	versionField := ""
+	if !strings.Contains(raw, `"version"`) {
+		versionField = `
+  "version": 2,`
+	}
+	const fields = `
+  "deploymentID": "dep-test",
+  "orgID": "org-test",
+  "identityID": "idn-test",
+  "connectionID": "conn-test",
+  "authMethod": "email",
+  "authTime": "2026-07-23T00:00:00Z",
+  "expiresAt": "2026-07-24T00:00:00Z",`
+	return strings.Replace(raw, "{", "{"+versionField+fields, 1)
 }

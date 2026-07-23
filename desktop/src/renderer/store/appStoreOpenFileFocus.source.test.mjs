@@ -13,8 +13,8 @@ const textEditorSource = await readFile(textEditorSourcePath, 'utf8');
 
 test('openFile focus is explicit and defaults to no editor focus', () => {
   assert.match(appSource, /focusEditor\?: boolean/);
-  assert.match(appSource, /editorFocusRequest: nextEditorFocusRequest\(\s*state,\s*existing\.id,\s*options\?\.focusEditor === true\s*\)/s);
-  assert.match(appSource, /editorFocusRequest: nextEditorFocusRequest\(\s*state,\s*nextTab\.id,\s*options\?\.focusEditor === true\s*\)/s);
+  assert.match(appSource, /editorFocusRequest: nextEditorFocusRequest\(\s*state,\s*existing\.id,\s*options\?\.focusEditor === true,?\s*\)/s);
+  assert.match(appSource, /editorFocusRequest: nextEditorFocusRequest\(\s*state,\s*nextTab\.id,\s*options\?\.focusEditor === true,?\s*\)/s);
   assert.match(appComponentSource, /autoFocus=\{options\?\.autoFocus \?\? false\}/);
 });
 

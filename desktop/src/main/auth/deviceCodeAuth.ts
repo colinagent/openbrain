@@ -13,19 +13,26 @@ export type DeviceCodeResponse = {
   verification_uri: string;
   expires_in: number;
   interval: number;
+  target_kind: 'personal' | 'organization';
+  org_id?: string;
+  org_slug?: string;
 };
 
 export type DeviceTokenResponse = {
   token: string;
   uid: string;
   email?: string;
+  deploymentID: string;
+  orgID: string;
+  identityID: string;
+  connectionID: string;
+  authMethod: string;
+  assurance?: string;
+  authTime: string;
+  expiresAt: string;
   baseUrl?: string;
   gateway?: string;
   aiGateway?: string;
-  defaultOrg?: {
-    id?: string;
-    name?: string;
-  };
 };
 
 type TokenResponseRecord = Record<string, unknown>;
@@ -36,12 +43,15 @@ export type DeviceCodeSession = {
   verificationUri: string;
   expiresAt: number;
   pollInterval: number;
+  targetKind: 'personal' | 'organization';
+  targetOrgID?: string;
+  targetOrgSlug?: string;
 };
 
 /**
  * Request a device code from the server.
  */
-export async function requestDeviceCode(gateway?: string): Promise<DeviceCodeSession> {
+export async function requestDeviceCode(gateway?: string, orgSlug?: string): Promise<DeviceCodeSession> {
   const origin = (gateway || DEFAULT_GATEWAY).replace(/\/$/, '');
   const url = `${origin}/v1/identity/device/code`;
 
@@ -50,7 +60,10 @@ export async function requestDeviceCode(gateway?: string): Promise<DeviceCodeSes
     res = await authFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: 'openbrain' }),
+      body: JSON.stringify({
+        client_id: 'openbrain',
+        org_slug: (orgSlug || '').trim().toLowerCase(),
+      }),
     });
   } catch (err) {
     throw new Error(`Failed to reach OpenBrain gateway for device login: ${readableNetworkError(err)}`);
@@ -66,11 +79,17 @@ export async function requestDeviceCode(gateway?: string): Promise<DeviceCodeSes
   const verificationUri = stringValue(data.verification_uri);
   const expiresIn = typeof data.expires_in === 'number' ? data.expires_in : 0;
   const interval = typeof data.interval === 'number' ? data.interval : 0;
+  const targetKind = data.target_kind === 'organization' ? 'organization' : data.target_kind === 'personal' ? 'personal' : null;
+  const targetOrgID = stringValue(data.org_id);
+  const targetOrgSlug = stringValue(data.org_slug).toLowerCase();
   if (
     !deviceCode ||
     !userCode ||
     !verificationUri ||
-    expiresIn <= 0
+    expiresIn <= 0 ||
+    !targetKind ||
+    (targetKind === 'organization' && (!targetOrgID || !targetOrgSlug)) ||
+    (targetKind === 'personal' && (targetOrgID || targetOrgSlug))
   ) {
     throw new Error('OpenBrain gateway returned an invalid device code response.');
   }
@@ -81,6 +100,9 @@ export async function requestDeviceCode(gateway?: string): Promise<DeviceCodeSes
     verificationUri,
     expiresAt: Date.now() + expiresIn * 1000,
     pollInterval: Math.max(interval * 1000, POLL_INTERVAL_MS),
+    targetKind,
+    targetOrgID: targetOrgID || undefined,
+    targetOrgSlug: targetOrgSlug || undefined,
   };
 }
 
@@ -99,30 +121,60 @@ export function normalizeDeviceTokenResponse(payload: unknown): DeviceTokenRespo
     stringValue(record.sub) ||
     stringValue(user?.uid) ||
     stringValue(user?.id);
-  if (!token || !uid) {
+  const deploymentID = stringValue(record.deploymentId) || stringValue(record.deployment_id);
+  const orgID = stringValue(record.orgId) || stringValue(record.org_id);
+  const identityID = stringValue(record.identityId) || stringValue(record.identity_id);
+  const connectionID = stringValue(record.connectionId) || stringValue(record.connection_id);
+  const authMethod = stringValue(record.authMethod) || stringValue(record.auth_method);
+  const assurance = stringValue(record.assurance);
+  const authTime = stringValue(record.authTime) || stringValue(record.auth_time);
+  const expiresAt = stringValue(record.expiresAt) || stringValue(record.expires_at);
+  if (
+    !token ||
+    !uid ||
+    !deploymentID ||
+    !orgID ||
+    !identityID ||
+    !connectionID ||
+    !authMethod ||
+    !authTime ||
+    !expiresAt ||
+    !Number.isFinite(Date.parse(authTime)) ||
+    !Number.isFinite(Date.parse(expiresAt))
+  ) {
     const missing = [
       token ? '' : 'token',
       uid ? '' : 'uid',
+      deploymentID ? '' : 'deploymentId',
+      orgID ? '' : 'orgId',
+      identityID ? '' : 'identityId',
+      connectionID ? '' : 'connectionId',
+      authMethod ? '' : 'authMethod',
+      authTime ? '' : 'authTime',
+      expiresAt ? '' : 'expiresAt',
     ].filter(Boolean).join(' and ');
-    throw new Error(`OpenBrain gateway completed device authorization but returned no ${missing}.`);
+    throw new Error(
+      missing
+        ? `OpenBrain gateway completed device authorization but returned no ${missing}.`
+        : 'OpenBrain gateway returned invalid tenant session timestamps.',
+    );
   }
 
-  const defaultOrg = objectValue(record.defaultOrg) || objectValue(record.default_org);
-  const defaultOrgID = stringValue(defaultOrg?.id);
-  const defaultOrgName = stringValue(defaultOrg?.name);
   return {
     token,
     uid,
     email: stringValue(record.email) || stringValue(user?.email) || undefined,
+    deploymentID,
+    orgID,
+    identityID,
+    connectionID,
+    authMethod,
+    assurance: assurance || undefined,
+    authTime,
+    expiresAt,
     baseUrl: stringValue(record.baseUrl) || stringValue(record.base_url) || undefined,
     gateway: stringValue(record.gateway) || stringValue(record.gatewayUrl) || stringValue(record.gateway_url) || undefined,
     aiGateway: stringValue(record.aiGateway) || stringValue(record.ai_gateway) || undefined,
-    defaultOrg: defaultOrgID || defaultOrgName
-      ? {
-          id: defaultOrgID || undefined,
-          name: defaultOrgName || undefined,
-        }
-      : undefined,
   };
 }
 
@@ -218,18 +270,55 @@ export async function pollDeviceToken(
   throw new Error('Device code polling timeout');
 }
 
+export async function exchangeTenantSession(
+  gateway: string,
+  token: string,
+  orgID: string,
+): Promise<DeviceTokenResponse> {
+  const origin = (gateway || DEFAULT_GATEWAY).replace(/\/$/, '');
+  let response: Response;
+  try {
+    response = await authFetch(`${origin}/v1/identity/session/exchanges`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ orgId: orgID }),
+    });
+  } catch (err) {
+    throw new Error(`Failed to reach OpenBrain gateway for organization switch: ${readableNetworkError(err)}`);
+  }
+  if (!response.ok) {
+    const failure = await readDeviceTokenError(response);
+    const message = failure.message || failure.error || `HTTP ${response.status}`;
+    if (response.status === 401) {
+      const error = new Error(message);
+      error.name = 'AuthInvalidError';
+      throw error;
+    }
+    if (failure.error === 'reauth_required') {
+      throw new Error('This organization requires a new SSO sign-in.');
+    }
+    throw new Error(message);
+  }
+  return normalizeDeviceTokenResponse(await response.json().catch(() => null));
+}
+
 /**
  * Start the device code login flow.
  * Returns when user authorizes or throws on timeout/error.
  */
 export async function startDeviceCodeLogin(
   gateway: string | undefined,
+  orgSlug: string | undefined,
   callbacks: {
     onCode: (session: DeviceCodeSession) => void;
     onPending?: () => void;
   }
 ): Promise<DeviceTokenResponse> {
-  const session = await requestDeviceCode(gateway);
+  const session = await requestDeviceCode(gateway, orgSlug);
   callbacks.onCode(session);
 
   // Open the login page first so stale browser sessions from the legacy

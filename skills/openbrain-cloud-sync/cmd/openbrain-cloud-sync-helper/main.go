@@ -25,10 +25,20 @@ const (
 )
 
 type workspaceIndexFile struct {
-	Version    int                               `json:"version"`
-	Accounts   map[string]*workspaceIndexAccount `json:"accounts,omitempty"`
-	Workspaces []workspaceEntry                  `json:"workspaces,omitempty"`
-	ActiveUID  string                            `json:"-"`
+	Version            int                                  `json:"version"`
+	Deployments        map[string]*workspaceIndexDeployment `json:"deployments"`
+	Workspaces         []workspaceEntry                     `json:"workspaces,omitempty"`
+	ActiveDeploymentID string                               `json:"-"`
+	ActiveOrgID        string                               `json:"-"`
+	ActiveUID          string                               `json:"-"`
+}
+
+type workspaceIndexDeployment struct {
+	Organizations map[string]*workspaceIndexOrganization `json:"organizations"`
+}
+
+type workspaceIndexOrganization struct {
+	Accounts map[string]*workspaceIndexAccount `json:"accounts"`
 }
 
 type workspaceIndexAccount struct {
@@ -65,9 +75,17 @@ type repositoryBinding struct {
 }
 
 type authConfig struct {
-	Gateway string `json:"gateway"`
-	Token   string `json:"token"`
-	UID     string `json:"uid"`
+	Version      int    `json:"version"`
+	Gateway      string `json:"gateway"`
+	Token        string `json:"token"`
+	UID          string `json:"uid"`
+	DeploymentID string `json:"deploymentID"`
+	OrgID        string `json:"orgID"`
+	IdentityID   string `json:"identityID"`
+	ConnectionID string `json:"connectionID"`
+	AuthMethod   string `json:"authMethod"`
+	AuthTime     string `json:"authTime"`
+	ExpiresAt    string `json:"expiresAt"`
 }
 
 type gitAccessToken struct {
@@ -737,26 +755,22 @@ func loadIndex() (workspaceIndexFile, error) {
 	var index workspaceIndexFile
 	auth, err := loadAuth()
 	if err != nil {
-		return workspaceIndexFile{Version: 2, Accounts: map[string]*workspaceIndexAccount{}}, nil
+		return newWorkspaceIndex(auth), nil
 	}
 	raw, err := os.ReadFile(filepath.Join(openBrainHome(), "index", "workspaces.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			index = workspaceIndexFile{Version: 2, Accounts: map[string]*workspaceIndexAccount{}}
-			index.activate(auth.UID)
-			return index, nil
+			return newWorkspaceIndex(auth), nil
 		}
 		return index, err
 	}
 	if err := json.Unmarshal(raw, &index); err != nil {
 		return index, err
 	}
-	if index.Version != 2 || index.Accounts == nil {
-		index = workspaceIndexFile{Version: 2, Accounts: map[string]*workspaceIndexAccount{}}
-		index.activate(auth.UID)
-		return index, nil
+	if index.Version != 3 || index.Deployments == nil {
+		return newWorkspaceIndex(auth), nil
 	}
-	index.activate(auth.UID)
+	index.activate(auth.DeploymentID, auth.OrgID, auth.UID)
 	return index, nil
 }
 
@@ -769,23 +783,47 @@ func loadAuth() (authConfig, error) {
 	if err := json.Unmarshal(raw, &auth); err != nil {
 		return auth, err
 	}
-	if strings.TrimSpace(auth.UID) == "" || strings.TrimSpace(auth.Token) == "" {
-		return auth, errors.New("login_required: sign in before syncing OpenBrain Cloud")
+	if auth.Version != 2 || strings.TrimSpace(auth.UID) == "" ||
+		strings.TrimSpace(auth.Token) == "" || strings.TrimSpace(auth.DeploymentID) == "" ||
+		strings.TrimSpace(auth.OrgID) == "" || strings.TrimSpace(auth.IdentityID) == "" ||
+		strings.TrimSpace(auth.ConnectionID) == "" || strings.TrimSpace(auth.AuthMethod) == "" ||
+		strings.TrimSpace(auth.AuthTime) == "" || strings.TrimSpace(auth.ExpiresAt) == "" {
+		return auth, errors.New("login_required: tenant-bound sign in is required before syncing OpenBrain Cloud")
 	}
 	return auth, nil
 }
 
-func (index *workspaceIndexFile) activate(uid string) {
+func newWorkspaceIndex(auth authConfig) workspaceIndexFile {
+	index := workspaceIndexFile{Version: 3, Deployments: map[string]*workspaceIndexDeployment{}}
+	index.activate(auth.DeploymentID, auth.OrgID, auth.UID)
+	return index
+}
+
+func (index *workspaceIndexFile) activate(deploymentID string, orgID string, uid string) {
+	deploymentID = strings.TrimSpace(deploymentID)
+	orgID = strings.TrimSpace(orgID)
 	uid = strings.TrimSpace(uid)
+	index.ActiveDeploymentID = deploymentID
+	index.ActiveOrgID = orgID
 	index.ActiveUID = uid
-	if index.Accounts == nil {
-		index.Accounts = map[string]*workspaceIndexAccount{}
+	if index.Deployments == nil {
+		index.Deployments = map[string]*workspaceIndexDeployment{}
 	}
-	if uid == "" {
+	if deploymentID == "" || orgID == "" || uid == "" {
 		index.Workspaces = nil
 		return
 	}
-	account := index.Accounts[uid]
+	deployment := index.Deployments[deploymentID]
+	if deployment == nil {
+		index.Workspaces = nil
+		return
+	}
+	organization := deployment.Organizations[orgID]
+	if organization == nil {
+		index.Workspaces = nil
+		return
+	}
+	account := organization.Accounts[uid]
 	if account == nil {
 		index.Workspaces = nil
 		return

@@ -84,7 +84,7 @@ test('BookReaderEditor renders through the resource service and writes notes thr
 
 test('book reader uses the bottom app status bar and a compact action menu', () => {
   assert.match(appSource, /const activeStatusFilePath = \(activeDocument\?\.filePath \|\| currentFilePath \|\| ''\)\.trim\(\);/);
-  assert.match(appSource, /title=\{activeStatusFilePath\}>\{activeStatusFilePath\}/);
+  assert.match(appSource, /title=\{statusBarPathDisplay\.label\}[\s\S]*?\{statusBarPathDisplay\.label\}/);
   assert.match(bookReaderSource, /MoreHorizontalIcon/);
   assert.match(bookReaderSource, /PopupMenu className="absolute right-0 top-8 w-64 text-secondary-text"/);
   assert.match(bookReaderSource, /aria-label="Reader actions"/);

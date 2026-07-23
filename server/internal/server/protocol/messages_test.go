@@ -8,15 +8,21 @@ import (
 
 func TestAuthConfigJSONRoundTripPreservesAIGateway(t *testing.T) {
 	raw := []byte(`{
-		"version": 1,
+		"version": 2,
 		"baseUrl": "https://www.openbrain.io",
 		"gateway": "https://api.op-agent.com",
 		"aiGateway": "https://api.op-agent.com",
 		"token": "tok",
 		"uid": "user-test1",
 		"email": "u1@example.com",
-		"activeOrgID": "acme",
-		"activeOrgName": "Acme",
+		"deploymentID": "dep-test",
+		"orgID": "org-acme",
+		"orgName": "Acme",
+		"identityID": "idn-test",
+		"connectionID": "conn-test",
+		"authMethod": "email",
+		"authTime": "2026-07-23T00:00:00Z",
+		"expiresAt": "2026-07-24T00:00:00Z",
 		"updatedAt": 123
 	}`)
 
@@ -27,8 +33,8 @@ func TestAuthConfigJSONRoundTripPreservesAIGateway(t *testing.T) {
 	if cfg.AIGateway != "https://api.op-agent.com" {
 		t.Fatalf("AIGateway = %q, want https://api.op-agent.com", cfg.AIGateway)
 	}
-	if cfg.ActiveOrgID != "acme" {
-		t.Fatalf("ActiveOrgID = %q, want acme", cfg.ActiveOrgID)
+	if cfg.OrgID != "org-acme" {
+		t.Fatalf("OrgID = %q, want org-acme", cfg.OrgID)
 	}
 
 	encoded, err := json.Marshal(cfg)
@@ -41,7 +47,7 @@ func TestAuthConfigJSONRoundTripPreservesAIGateway(t *testing.T) {
 	if !strings.Contains(string(encoded), `"aiGateway":"https://api.op-agent.com"`) {
 		t.Fatalf("encoded json missing aiGateway: %s", string(encoded))
 	}
-	if !strings.Contains(string(encoded), `"activeOrgID":"acme"`) {
-		t.Fatalf("encoded json missing activeOrgID: %s", string(encoded))
+	if !strings.Contains(string(encoded), `"orgID":"org-acme"`) {
+		t.Fatalf("encoded json missing orgID: %s", string(encoded))
 	}
 }

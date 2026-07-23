@@ -575,16 +575,24 @@ type AgentsRootsResult struct {
 
 // AuthConfig mirrors OpAgent's ~/.openbrain/configs/auth.json
 type AuthConfig struct {
-	Version       int    `json:"version"`
-	BaseUrl       string `json:"baseUrl"`
-	Gateway       string `json:"gateway"`
-	AIGateway     string `json:"aiGateway,omitempty"`
-	Token         string `json:"token"`
-	UID           string `json:"uid"`
-	Email         string `json:"email,omitempty"`
-	ActiveOrgID   string `json:"activeOrgID,omitempty"`
-	ActiveOrgName string `json:"activeOrgName,omitempty"`
-	UpdatedAt     int64  `json:"updatedAt"`
+	Version      int    `json:"version"`
+	BaseUrl      string `json:"baseUrl"`
+	Gateway      string `json:"gateway"`
+	AIGateway    string `json:"aiGateway,omitempty"`
+	Token        string `json:"token"`
+	UID          string `json:"uid"`
+	Email        string `json:"email,omitempty"`
+	DeploymentID string `json:"deploymentID"`
+	OrgID        string `json:"orgID"`
+	OrgSlug      string `json:"orgSlug,omitempty"`
+	OrgName      string `json:"orgName,omitempty"`
+	IdentityID   string `json:"identityID"`
+	ConnectionID string `json:"connectionID"`
+	AuthMethod   string `json:"authMethod"`
+	Assurance    string `json:"assurance,omitempty"`
+	AuthTime     string `json:"authTime"`
+	ExpiresAt    string `json:"expiresAt"`
+	UpdatedAt    int64  `json:"updatedAt"`
 }
 
 // UserProfile mirrors OpAgent's ~/.openbrain/settings/profile.json

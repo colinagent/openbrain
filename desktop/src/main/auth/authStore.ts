@@ -7,18 +7,30 @@ import { writeJsonFileAtomic } from '../shared/jsonFile';
  * Auth configuration stored in ~/.openbrain/configs/user/auth.json
  */
 export type AuthConfig = {
-  version: number;
+  version: 2;
   baseUrl: string;
   gateway: string;
   aiGateway: string;
-  defaultOrgID?: string;
-  defaultOrgName?: string;
   token: string;
   uid: string;
   email?: string;
-  activeOrgID?: string;
-  activeOrgName?: string;
+  deploymentID: string;
+  orgID: string;
+  orgSlug?: string;
+  orgName?: string;
+  identityID: string;
+  connectionID: string;
+  authMethod: string;
+  assurance?: string;
+  authTime: string;
+  expiresAt: string;
   updatedAt: number;
+};
+
+export type CreateAuthConfigInput = Omit<AuthConfig, 'version' | 'updatedAt' | 'baseUrl' | 'gateway' | 'aiGateway'> & {
+  baseUrl?: string;
+  gateway?: string;
+  aiGateway?: string;
 };
 
 const DEFAULT_BASE_URL = 'https://openbrain.chat';
@@ -80,18 +92,28 @@ export function normalizeActiveOrgID(raw?: string | null): string | undefined {
   if (!value) {
     return undefined;
   }
-  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value) && !value.startsWith('org-')
-    ? value
-    : undefined;
+  return /^[a-z0-9](?:[a-z0-9-]{0,126}[a-z0-9])?$/.test(value) ? value : undefined;
 }
 
-function normalizeActiveOrgName(raw?: string | null): string | undefined {
+function normalizeDisplayValue(raw?: string | null): string | undefined {
   const value = (raw || '').trim();
   return value || undefined;
 }
 
-function normalizeDefaultOrgID(raw?: string | null): string | undefined {
-  return normalizeActiveOrgID(raw);
+function normalizeRequiredID(raw?: string | null): string | undefined {
+  const value = (raw || '').trim();
+  if (!value || value.length > 128 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)) {
+    return undefined;
+  }
+  return value;
+}
+
+function normalizeTimestamp(raw?: string | null): string | undefined {
+  const value = (raw || '').trim();
+  if (!value || !Number.isFinite(Date.parse(value))) {
+    return undefined;
+  }
+  return value;
 }
 
 /**
@@ -121,8 +143,14 @@ export function parseAuthCallbackUrl(url: string): {
   baseUrl?: string;
   gateway?: string;
   aiGateway?: string;
-  defaultOrgID?: string;
-  defaultOrgName?: string;
+  deploymentID: string;
+  orgID: string;
+  identityID: string;
+  connectionID: string;
+  authMethod: string;
+  assurance?: string;
+  authTime: string;
+  expiresAt: string;
 } | null {
   try {
     const parsedUrl = new URL(url);
@@ -146,9 +174,26 @@ export function parseAuthCallbackUrl(url: string): {
     }
 
     const token = params.get('token');
-    const uid = params.get('uid');
+    const uid = normalizeRequiredID(params.get('uid'));
+    const deploymentID = normalizeRequiredID(params.get('deploymentId'));
+    const orgID = normalizeActiveOrgID(params.get('orgId'));
+    const identityID = normalizeRequiredID(params.get('identityId'));
+    const connectionID = normalizeRequiredID(params.get('connectionId'));
+    const authMethod = normalizeDisplayValue(params.get('authMethod'));
+    const authTime = normalizeTimestamp(params.get('authTime'));
+    const expiresAt = normalizeTimestamp(params.get('expiresAt'));
 
-    if (!token || !uid) {
+    if (
+      !token ||
+      !uid ||
+      !deploymentID ||
+      !orgID ||
+      !identityID ||
+      !connectionID ||
+      !authMethod ||
+      !authTime ||
+      !expiresAt
+    ) {
       return null;
     }
 
@@ -159,8 +204,14 @@ export function parseAuthCallbackUrl(url: string): {
       baseUrl: params.get('baseUrl') || undefined,
       gateway: params.get('gateway') || undefined,
       aiGateway: params.get('aiGateway') || undefined,
-      defaultOrgID: normalizeDefaultOrgID(params.get('defaultOrgID')),
-      defaultOrgName: normalizeActiveOrgName(params.get('defaultOrgName')),
+      deploymentID,
+      orgID,
+      identityID,
+      connectionID,
+      authMethod,
+      assurance: normalizeDisplayValue(params.get('assurance')),
+      authTime,
+      expiresAt,
     };
   } catch {
     return null;
@@ -175,44 +226,50 @@ export async function loadAuthConfig(homeDir: string): Promise<AuthConfig | null
   try {
     const data = await fs.readFile(configPath, 'utf8');
     const parsed = JSON.parse(data) as Partial<AuthConfig>;
-    if (!parsed || typeof parsed.version !== 'number' || !parsed.token || !parsed.uid) {
+    const deploymentID = normalizeRequiredID(parsed?.deploymentID);
+    const orgID = normalizeActiveOrgID(parsed?.orgID);
+    const uid = normalizeRequiredID(parsed?.uid);
+    const identityID = normalizeRequiredID(parsed?.identityID);
+    const connectionID = normalizeRequiredID(parsed?.connectionID);
+    const authMethod = normalizeDisplayValue(parsed?.authMethod);
+    const authTime = normalizeTimestamp(parsed?.authTime);
+    const expiresAt = normalizeTimestamp(parsed?.expiresAt);
+    if (
+      !parsed ||
+      parsed.version !== 2 ||
+      !parsed.token ||
+      !uid ||
+      !deploymentID ||
+      !orgID ||
+      !identityID ||
+      !connectionID ||
+      !authMethod ||
+      !authTime ||
+      !expiresAt
+    ) {
       return null;
     }
     const baseUrl = normalizeBaseUrl(parsed.baseUrl);
-    const normalized: AuthConfig = {
-      version: parsed.version,
+    return {
+      version: 2,
       baseUrl,
       gateway: normalizeGateway(parsed.gateway),
       aiGateway: normalizeAIGateway(parsed.aiGateway, baseUrl),
-      defaultOrgID: normalizeDefaultOrgID(parsed.defaultOrgID),
-      defaultOrgName: normalizeDefaultOrgID(parsed.defaultOrgID) ? normalizeActiveOrgName(parsed.defaultOrgName) : undefined,
       token: parsed.token,
-      uid: parsed.uid,
+      uid,
       email: normalizeAuthEmail(parsed.email),
-      activeOrgID: normalizeActiveOrgID(parsed.activeOrgID),
-      activeOrgName: normalizeActiveOrgID(parsed.activeOrgID) ? normalizeActiveOrgName(parsed.activeOrgName) : undefined,
+      deploymentID,
+      orgID,
+      orgSlug: normalizeDisplayValue(parsed.orgSlug)?.toLowerCase(),
+      orgName: normalizeDisplayValue(parsed.orgName),
+      identityID,
+      connectionID,
+      authMethod,
+      assurance: normalizeDisplayValue(parsed.assurance),
+      authTime,
+      expiresAt,
       updatedAt: parsed.updatedAt || 0,
     };
-    // Best-effort migration: persist newly added fields (e.g. gateway) so that
-    // other processes (openbrain-server/openbrain) can scan auth.json directly.
-    if (
-      !parsed.gateway ||
-      normalizeGateway(parsed.gateway) !== normalized.gateway ||
-      !parsed.aiGateway ||
-      normalizeAIGateway(parsed.aiGateway, baseUrl) !== normalized.aiGateway ||
-      parsed.defaultOrgID !== normalized.defaultOrgID ||
-      parsed.defaultOrgName !== normalized.defaultOrgName ||
-      parsed.email !== normalized.email ||
-      parsed.activeOrgID !== normalized.activeOrgID ||
-      parsed.activeOrgName !== normalized.activeOrgName
-    ) {
-      try {
-        await saveAuthConfig(homeDir, normalized);
-      } catch {
-        // ignore write-back failures
-      }
-    }
-    return normalized;
   } catch {
     return null;
   }
@@ -222,23 +279,52 @@ export async function loadAuthConfig(homeDir: string): Promise<AuthConfig | null
  * Save auth config to disk.
  */
 export async function saveAuthConfig(homeDir: string, config: AuthConfig): Promise<void> {
-  if (!config.uid) {
-    throw new Error('uid is required');
+  if (config.version !== 2) {
+    throw new Error('auth config version 2 is required');
   }
   const configDir = getAuthConfigDir(homeDir);
   const configPath = getAuthConfigPath(homeDir);
 
   const baseUrl = normalizeBaseUrl(config.baseUrl);
+  const uid = normalizeRequiredID(config.uid);
+  const deploymentID = normalizeRequiredID(config.deploymentID);
+  const orgID = normalizeActiveOrgID(config.orgID);
+  const identityID = normalizeRequiredID(config.identityID);
+  const connectionID = normalizeRequiredID(config.connectionID);
+  const authMethod = normalizeDisplayValue(config.authMethod);
+  const authTime = normalizeTimestamp(config.authTime);
+  const expiresAt = normalizeTimestamp(config.expiresAt);
+  if (
+    !config.token ||
+    !uid ||
+    !deploymentID ||
+    !orgID ||
+    !identityID ||
+    !connectionID ||
+    !authMethod ||
+    !authTime ||
+    !expiresAt
+  ) {
+    throw new Error('tenant-bound auth config is incomplete');
+  }
   const normalized: AuthConfig = {
     ...config,
+    version: 2,
     baseUrl,
     gateway: normalizeGateway(config.gateway),
     aiGateway: normalizeAIGateway(config.aiGateway, baseUrl),
-    defaultOrgID: normalizeDefaultOrgID(config.defaultOrgID),
-    defaultOrgName: normalizeDefaultOrgID(config.defaultOrgID) ? normalizeActiveOrgName(config.defaultOrgName) : undefined,
+    uid,
     email: normalizeAuthEmail(config.email),
-    activeOrgID: normalizeActiveOrgID(config.activeOrgID),
-    activeOrgName: normalizeActiveOrgID(config.activeOrgID) ? normalizeActiveOrgName(config.activeOrgName) : undefined,
+    deploymentID,
+    orgID,
+    orgSlug: normalizeDisplayValue(config.orgSlug)?.toLowerCase(),
+    orgName: normalizeDisplayValue(config.orgName),
+    identityID,
+    connectionID,
+    authMethod,
+    assurance: normalizeDisplayValue(config.assurance),
+    authTime,
+    expiresAt,
   };
 
   await fs.mkdir(configDir, { recursive: true });
@@ -260,30 +346,14 @@ export async function clearAuthConfig(homeDir: string): Promise<void> {
 /**
  * Create auth config from parsed callback params.
  */
-export function createAuthConfig(
-  token: string,
-  uid: string,
-  email?: string,
-  baseUrl?: string,
-  gateway?: string,
-  aiGateway?: string,
-  defaultOrgID?: string,
-  defaultOrgName?: string
-): AuthConfig {
-  if (!uid) {
-    throw new Error('uid is required');
-  }
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+export function createAuthConfig(input: CreateAuthConfigInput): AuthConfig {
+  const normalizedBaseUrl = normalizeBaseUrl(input.baseUrl);
   return {
-    version: 1,
+    ...input,
+    version: 2,
     baseUrl: normalizedBaseUrl,
-    gateway: normalizeGateway(gateway),
-    aiGateway: normalizeAIGateway(aiGateway, normalizedBaseUrl),
-    defaultOrgID: normalizeDefaultOrgID(defaultOrgID),
-    defaultOrgName: normalizeDefaultOrgID(defaultOrgID) ? normalizeActiveOrgName(defaultOrgName) : undefined,
-    token,
-    uid,
-    email: normalizeAuthEmail(email),
+    gateway: normalizeGateway(input.gateway),
+    aiGateway: normalizeAIGateway(input.aiGateway, normalizedBaseUrl),
     updatedAt: Date.now(),
   };
 }

@@ -19,10 +19,6 @@ export type GatewayInfo = {
   baseUrl: string;
   gateway: string;
   aiGateway: string;
-  defaultOrg?: {
-    id: string;
-    name?: string;
-  };
 };
 
 export type LoginOptions = {
@@ -61,12 +57,6 @@ function parseGatewayInfo(payload: unknown): GatewayInfo | null {
   const baseUrl = normalizeAbsoluteUrl(record.baseUrl);
   const gateway = normalizeAbsoluteUrl(record.gateway);
   const aiGateway = normalizeAbsoluteUrl(record.aiGateway);
-  const defaultOrgRecord =
-    record.defaultOrg && typeof record.defaultOrg === 'object'
-      ? (record.defaultOrg as Record<string, unknown>)
-      : null;
-  const defaultOrgID = normalizeOrgID(defaultOrgRecord?.id);
-  const defaultOrgName = typeof defaultOrgRecord?.name === 'string' ? defaultOrgRecord.name.trim() : '';
   if (!baseUrl || !gateway || !aiGateway) {
     return null;
   }
@@ -75,24 +65,7 @@ function parseGatewayInfo(payload: unknown): GatewayInfo | null {
     baseUrl,
     gateway,
     aiGateway,
-    defaultOrg: defaultOrgID
-      ? {
-          id: defaultOrgID,
-          name: defaultOrgName || undefined,
-        }
-      : undefined,
   };
-}
-
-function normalizeOrgID(raw: unknown): string | undefined {
-  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
-  if (!value) {
-    return undefined;
-  }
-  if (value.startsWith('org-')) {
-    return undefined;
-  }
-  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value) ? value : undefined;
 }
 
 async function fetchGatewayInfo(endpoint: string): Promise<GatewayInfo> {

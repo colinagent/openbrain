@@ -4,11 +4,9 @@ import { useAppStore } from '../../store/appStore';
 import { useRecentWorkspacesStore, type LocalRecentWorkspace } from '../../store/recentWorkspacesStore';
 import { useToastStore } from '../../store/toastStore';
 import { useUiStore } from '../../store/uiStore';
-import { useAuthStore } from '../../store/authStore';
-import { useModelsStore } from '../../store/modelsStore';
 import { formatMessengerPendingBadgeCount, selectMessengerPendingRequestTotal, useMessengerStore } from '../../store/messengerStore';
 import type { LocalOpenBrainWorkspace } from '../../store/openBrainStore';
-import type { DesktopUpdateState, MarketplaceOrg } from '../../types/electron';
+import type { DesktopUpdateState } from '../../types/electron';
 import {
   AgentBotIcon,
   ClockIcon,
@@ -187,7 +185,6 @@ export function Sidebar({
 }: SidebarProps) {
   const [menuKind, setMenuKind] = useState<'switch' | 'add' | null>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const [marketplaceOrgs, setMarketplaceOrgs] = useState<MarketplaceOrg[]>([]);
   const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdateState | null>(null);
   const [addAgentPopupAnchor, setAddAgentPopupAnchor] = useState<AddAgentPopupAnchor | null>(null);
   const [addAgentPopupTargetDir, setAddAgentPopupTargetDir] = useState<string | null>(null);
@@ -219,14 +216,9 @@ export function Sidebar({
   const addAgentReference = useAppStore((state) => state.addAgentReference);
   const addCustomAgent = useAppStore((state) => state.addCustomAgent);
   const openMarketplaceTab = useAppStore((state) => state.openMarketplaceTab);
-  const listMarketplaceOrgs = useAppStore((state) => state.listMarketplaceOrgs);
-  const connectionState = useAppStore((state) => state.connectionState);
   const invalidateAgentScanCache = useAppStore((state) => state.invalidateAgentScanCache);
   const fetchDirAgentsInfo = useAppStore((state) => state.fetchDirAgentsInfo);
   const refreshVisibleWorkspaceTree = useAppStore((state) => state.refreshVisibleWorkspaceTree);
-  const activeOrgID = useAuthStore((state) => state.activeOrgID);
-  const setActiveOrg = useAuthStore((state) => state.setActiveOrg);
-  const refreshModelsFromOpenBrain = useModelsStore((state) => state.refreshFromOpenBrain);
   const recent = useRecentWorkspacesStore((state) => state.recent.local);
   const loadRecent = useRecentWorkspacesStore((state) => state.load);
   const recordLocalRecent = useRecentWorkspacesStore((state) => state.recordLocal);
@@ -463,41 +455,6 @@ export function Sidebar({
     window.addEventListener('mousedown', onMouseDown, true);
     return () => window.removeEventListener('mousedown', onMouseDown, true);
   }, [menuKind]);
-
-  useEffect(() => {
-    if (connectionState !== 'connected') {
-      setMarketplaceOrgs([]);
-      return;
-    }
-    let cancelled = false;
-    void listMarketplaceOrgs()
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
-        setMarketplaceOrgs(result.orgs || []);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setMarketplaceOrgs([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [connectionState, listMarketplaceOrgs]);
-
-  useEffect(() => {
-    if (!marketplaceOrgs.length || activeOrgID) {
-      return;
-    }
-    const defaultOrg = marketplaceOrgs[0];
-    void setActiveOrg(defaultOrg.id, defaultOrg.name || defaultOrg.id)
-      .then(() => refreshModelsFromOpenBrain())
-      .catch((error) => {
-        pushToast(error instanceof Error ? error.message : 'Failed to select organization');
-      });
-  }, [activeOrgID, marketplaceOrgs, pushToast, refreshModelsFromOpenBrain, setActiveOrg]);
 
   const dropdownContent = (
     <PopupMenu

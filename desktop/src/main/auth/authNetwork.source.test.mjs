@@ -34,7 +34,7 @@ test('device login treats the desktop token exchange as the signed-in boundary',
   assert.match(deviceSource, /returned no \$\{missing\}/);
   assert.match(deviceSource, /Device login token request failed \(\$\{res\.status\}\)/);
   assert.match(mainSource, /let activeDeviceLoginAttempt = 0/);
-  assert.match(mainSource, /let session: DeviceCodeSession;[\s\S]*session = await requestDeviceCode\(gateway\)/);
+  assert.match(mainSource, /let session: DeviceCodeSession;[\s\S]*session = await requestDeviceCode\(gateway, orgSlug\)/);
   assert.match(mainSource, /void pollDeviceToken\(session, gateway\)/);
   assert.match(mainSource, /const verificationLoginUri = deviceVerificationLoginUri\(session\.verificationUri\)/);
   assert.match(mainSource, /shell\.openExternal\(verificationLoginUri\)/);
@@ -70,6 +70,27 @@ test('auth profile reads are bound to the current signed-in account', () => {
   assert.match(mainSource, /ipcMain\.handle\('auth:get'[\s\S]*loadProfileForAuth\(homeDir, config\)/);
   assert.match(mainSource, /ipcMain\.handle\('profile:get'[\s\S]*loadProfileForAuth\(homeDir, config\)/);
   assert.match(mainSource, /ipcMain\.handle\('auth:setActiveOrg'[\s\S]*loadProfileForAuth\(homeDir, next\)/);
+});
+
+test('organization switching exchanges the tenant session instead of mutating local metadata', () => {
+  assert.match(mainSource, /ipcMain\.handle\('auth:setActiveOrg'[\s\S]*exchangeTenantSession\(config\.gateway, config\.token, orgID\)/);
+  assert.match(mainSource, /exchanged\.deploymentID !== config\.deploymentID/);
+  assert.match(mainSource, /exchanged\.orgID !== orgID/);
+  assert.match(mainSource, /exchanged\.identityID !== config\.identityID/);
+  assert.match(mainSource, /exchanged\.connectionID !== config\.connectionID/);
+  assert.match(mainSource, /exchanged\.authMethod !== config\.authMethod/);
+  assert.match(mainSource, /exchanged\.authTime !== config\.authTime/);
+  assert.match(mainSource, /await saveAuthConfig\(homeDir, next\)/);
+});
+
+test('server-confirmed revoked sessions are cleared while network failures remain recoverable', () => {
+  const errorSource = read('authErrors.ts');
+  assert.match(errorSource, /normalized === 'session revoked'/);
+  assert.match(mainSource, /const message = await readErrorMessage\(res\)/);
+  assert.match(mainSource, /isAuthInvalidResponse\(res\.status, message\)[\s\S]*throw new AuthInvalidError\(message\)/);
+  assert.match(mainSource, /async function resolveBoundOrgMetadata[\s\S]*if \(isAuthInvalidError\(err\)\)[\s\S]*throw err/);
+  assert.match(mainSource, /async function ensureBoundOrgMetadata[\s\S]*await invalidateAuthSession\('session_expired'\);[\s\S]*return null/);
+  assert.match(mainSource, /catch \(err\) \{[\s\S]*if \(!isAuthInvalidError\(err\)\)[\s\S]*throw err[\s\S]*await invalidateAuthSession/);
 });
 
 test('desktop profile avatars use only canonical user avatar URLs', () => {

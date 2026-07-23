@@ -595,6 +595,13 @@ func loadLocalUserConfig(baseDir string) (*op.UserConfig, error) {
 	if auth, ok, err := readOptionalJSON[op.AuthConfig](authPath); err != nil {
 		return nil, err
 	} else if ok {
+		if auth.Version != 2 || strings.TrimSpace(auth.Token) == "" ||
+			strings.TrimSpace(auth.UID) == "" || strings.TrimSpace(auth.DeploymentID) == "" ||
+			strings.TrimSpace(auth.OrgID) == "" || strings.TrimSpace(auth.IdentityID) == "" ||
+			strings.TrimSpace(auth.ConnectionID) == "" || strings.TrimSpace(auth.AuthMethod) == "" ||
+			strings.TrimSpace(auth.AuthTime) == "" || strings.TrimSpace(auth.ExpiresAt) == "" {
+			return nil, fmt.Errorf("tenant-bound auth config version 2 is required")
+		}
 		userCfg.Auth = &auth
 	}
 

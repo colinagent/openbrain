@@ -2,15 +2,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { fetchDashboardHosts } from './dashboardService';
+import type { AuthConfig } from '../auth/authStore';
 
-const baseAuth = {
-  version: 1,
+const baseAuth: AuthConfig = {
+  version: 2,
   baseUrl: 'https://api.op-agent.com',
   gateway: 'https://api.op-agent.com',
   aiGateway: 'https://api.op-agent.com',
   token: 'token-123',
   uid: 'user-1',
-  key: 'user-key',
+  deploymentID: 'dep-test',
+  orgID: 'org-test',
+  identityID: 'idn-test',
+  connectionID: 'conn-test',
+  authMethod: 'email',
+  authTime: '2026-07-23T00:00:00Z',
+  expiresAt: '2026-07-24T00:00:00Z',
   updatedAt: Date.now(),
 };
 

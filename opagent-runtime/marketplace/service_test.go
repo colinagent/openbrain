@@ -195,7 +195,7 @@ func TestServiceInstallsOrgItemIntoFlatDirectoryAndIndex(t *testing.T) {
 	if err := os.MkdirAll(authDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(authDir, "auth.json"), []byte(`{"gateway":"`+server.URL+`","token":"tok"}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(authDir, "auth.json"), []byte(`{"version":2,"gateway":"`+server.URL+`","token":"tok","uid":"user-test","deploymentID":"dep-test","orgID":"org-acme","identityID":"idn-test","connectionID":"conn-test","authMethod":"email","authTime":"2026-07-23T00:00:00Z","expiresAt":"2026-07-24T00:00:00Z"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

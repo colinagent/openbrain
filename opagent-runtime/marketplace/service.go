@@ -176,10 +176,17 @@ type Service struct {
 }
 
 type authConfig struct {
-	Gateway       string `json:"gateway"`
-	Token         string `json:"token"`
-	ActiveOrgID   string `json:"activeOrgID,omitempty"`
-	ActiveOrgName string `json:"activeOrgName,omitempty"`
+	Version      int    `json:"version"`
+	Gateway      string `json:"gateway"`
+	Token        string `json:"token"`
+	UID          string `json:"uid"`
+	DeploymentID string `json:"deploymentID"`
+	OrgID        string `json:"orgID"`
+	IdentityID   string `json:"identityID"`
+	ConnectionID string `json:"connectionID"`
+	AuthMethod   string `json:"authMethod"`
+	AuthTime     string `json:"authTime"`
+	ExpiresAt    string `json:"expiresAt"`
 }
 
 type marketplaceScope struct {
@@ -784,6 +791,9 @@ func (s *Service) fetchOrgCatalog(ctx context.Context, orgID string) (*Catalog, 
 	if err != nil {
 		return nil, err
 	}
+	if orgID != strings.TrimSpace(auth.OrgID) {
+		return nil, fmt.Errorf("orgID must match the token-bound organization")
+	}
 	url := strings.TrimRight(auth.Gateway, "/") + "/api/v1/user/orgs/" + orgID + "/marketplace/catalog"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -827,8 +837,19 @@ func (s *Service) loadAuthConfig() (*authConfig, error) {
 	}
 	cfg.Gateway = strings.TrimSpace(cfg.Gateway)
 	cfg.Token = strings.TrimSpace(cfg.Token)
-	if cfg.Gateway == "" || cfg.Token == "" {
-		return nil, fmt.Errorf("auth config gateway and token are required")
+	cfg.UID = strings.TrimSpace(cfg.UID)
+	cfg.DeploymentID = strings.TrimSpace(cfg.DeploymentID)
+	cfg.OrgID = strings.TrimSpace(cfg.OrgID)
+	cfg.IdentityID = strings.TrimSpace(cfg.IdentityID)
+	cfg.ConnectionID = strings.TrimSpace(cfg.ConnectionID)
+	cfg.AuthMethod = strings.TrimSpace(cfg.AuthMethod)
+	cfg.AuthTime = strings.TrimSpace(cfg.AuthTime)
+	cfg.ExpiresAt = strings.TrimSpace(cfg.ExpiresAt)
+	if cfg.Version != 2 || cfg.Gateway == "" || cfg.Token == "" || cfg.UID == "" ||
+		cfg.DeploymentID == "" || cfg.OrgID == "" || cfg.IdentityID == "" ||
+		cfg.ConnectionID == "" || cfg.AuthMethod == "" || cfg.AuthTime == "" ||
+		cfg.ExpiresAt == "" {
+		return nil, fmt.Errorf("tenant-bound auth config version 2 is required")
 	}
 	return &cfg, nil
 }

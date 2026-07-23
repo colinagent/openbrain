@@ -905,6 +905,11 @@ export function mergeOpenBrainOrgCatalogs(
   const normalized = normalizeModelsConfig(config);
   const orgCatalogs = catalogs.map(normalizeOpenBrainOrgCatalog);
   const managedProviderKeys = new Set(orgCatalogs.map((catalog) => catalog.providerKey));
+  const previousManagedProviderKeys = new Set(
+    Object.entries(normalized.providers)
+      .filter(([providerKey, provider]) => provider.managed === true || providerKey === OPENBRAIN_PROVIDER_KEY)
+      .map(([providerKey]) => providerKey),
+  );
   const providerLabels = new Map(orgCatalogs.map((catalog) => [catalog.providerKey, catalog.providerLabel] as const));
   const remoteModelsByProvider = new Map<string, Map<string, OpenBrainModelEntry>>();
   for (const orgCatalog of orgCatalogs) {
@@ -938,11 +943,9 @@ export function mergeOpenBrainOrgCatalogs(
   let changed = false;
   for (const model of normalized.models) {
     const normalizedProvider = model.provider;
-    if (options.privateOnly) {
-      if (!managedProviderKeys.has(normalizedProvider)) {
-        changed = true;
-        continue;
-      }
+    if (previousManagedProviderKeys.has(normalizedProvider) && !managedProviderKeys.has(normalizedProvider)) {
+      changed = true;
+      continue;
     }
     if (!managedProviderKeys.has(normalizedProvider)) {
       modelsByKey.set(model.key, model);

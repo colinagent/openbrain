@@ -42,10 +42,14 @@ test('normalizes OAuth-style device token responses into desktop auth fields', (
     base_url: 'https://app.openbrain.chat',
     gateway_url: 'https://api.op-agent.com',
     ai_gateway: 'https://api.op-agent.com',
-    default_org: {
-      id: 'cloud',
-      name: 'Cloud',
-    },
+    deployment_id: 'dep-saas',
+    org_id: 'org-acme',
+    identity_id: 'idn-123',
+    connection_id: 'conn-123',
+    auth_method: 'email',
+    assurance: 'mfa',
+    auth_time: '2026-07-23T00:00:00Z',
+    expires_at: '2026-07-24T00:00:00Z',
   });
   assert.equal(normalized.token, 'token-123');
   assert.equal(normalized.uid, 'uid-123');
@@ -53,8 +57,14 @@ test('normalizes OAuth-style device token responses into desktop auth fields', (
   assert.equal(normalized.baseUrl, 'https://app.openbrain.chat');
   assert.equal(normalized.gateway, 'https://api.op-agent.com');
   assert.equal(normalized.aiGateway, 'https://api.op-agent.com');
-  assert.equal(normalized.defaultOrg?.id, 'cloud');
-  assert.equal(normalized.defaultOrg?.name, 'Cloud');
+  assert.equal(normalized.deploymentID, 'dep-saas');
+  assert.equal(normalized.orgID, 'org-acme');
+  assert.equal(normalized.identityID, 'idn-123');
+  assert.equal(normalized.connectionID, 'conn-123');
+  assert.equal(normalized.authMethod, 'email');
+  assert.equal(normalized.assurance, 'mfa');
+  assert.equal(normalized.authTime, '2026-07-23T00:00:00Z');
+  assert.equal(normalized.expiresAt, '2026-07-24T00:00:00Z');
 });
 
 test('rejects completed device authorization without token and uid', () => {
@@ -65,6 +75,16 @@ test('rejects completed device authorization without token and uid', () => {
   assert.throws(
     () => normalizeDeviceTokenResponse({ user: { id: 'uid-only' } }),
     /returned no token/,
+  );
+});
+
+test('rejects completed device authorization without tenant context', () => {
+  assert.throws(
+    () => normalizeDeviceTokenResponse({
+      access_token: 'token-123',
+      uid: 'uid-123',
+    }),
+    /deploymentId/,
   );
 });
 

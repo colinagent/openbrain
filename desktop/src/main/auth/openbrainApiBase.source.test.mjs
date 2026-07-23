@@ -30,6 +30,14 @@ test('OpenBrain workspace callers use the shared API base resolver', () => {
   assert.doesNotMatch(workspaceSource, /process\.env\.OPENBRAIN_API_URL \|\| ''/);
 });
 
+test('OpenBrain workspace APIs enforce the token-bound organization', () => {
+  assert.match(workspaceSource, /function requireBoundOrgID\(/);
+  assert.match(workspaceSource, /tenant_context_mismatch: workspace organization does not match the authenticated organization/);
+  assert.match(workspaceSource, /const normalizedOrgID = requireBoundOrgID\(auth, orgID\);/);
+  assert.match(workspaceSource, /requireBoundOrgID\(auth, result\.orgID, true\);/);
+  assert.doesNotMatch(workspaceSource, /['"]X-Org-ID['"]/);
+});
+
 test('OpenBrain defaults to the authenticated cloud provider', () => {
   assert.match(settingsSource, /openBrain:\s*\{[\s\S]*provider:\s*'cloud'/);
   assert.match(settingsSource, /normalizeOpenBrainUserSettings/);
@@ -40,7 +48,8 @@ test('OpenBrain defaults to the authenticated cloud provider', () => {
 
 test('OpenBrain renderer routes cloud source operations through the active workspace runtime server', () => {
   assert.match(openBrainServiceSource, /resolveOpenBrainBaseUrl/);
-  assert.match(openBrainServiceSource, /useAppStore\.getStoreByTabId\(workspaceTabId\)\.getState\(\)/);
+  assert.match(openBrainServiceSource, /const targetTabId = workspaceTabId \|\| getActiveWorkspaceTabId\(\);/);
+  assert.match(openBrainServiceSource, /useAppStore\.getStoreByTabId\(targetTabId\)\.getState\(\)/);
   assert.match(openBrainServiceSource, /remoteSession\?\.localPort/);
   assert.match(openBrainServiceSource, /\/v1\/openbrain\/cloud\/sources/);
   assert.match(openBrainServiceSource, /\/v1\/openbrain\/cloud\/sources\/action/);
@@ -60,11 +69,10 @@ test('OpenBrain cloud provider calls authenticated Brain APIs', () => {
   assert.match(brainProviderSource, /cloud_unauthorized/);
   assert.match(brainProviderSource, /authRequired:\s*false/);
   assert.doesNotMatch(brainProviderSource, /error:\s*['"]unauthorized['"]/);
-  assert.match(brainProviderSource, /templateID:\s*CLOUD_WORKSPACE_TEMPLATE_ID/);
   assert.match(brainProviderSource, /listWorkspaceTemplates\(auth\)/);
-  assert.match(brainProviderSource, /provider:\s*'github'/);
-  assert.match(brainProviderSource, /storageProvider:\s*'github'/);
-  assert.match(brainProviderSource, /repositoryOwner/);
+  assert.match(brainProviderSource, /templates\.templates\.find\(\(template\) => template\.templateID === CLOUD_WORKSPACE_TEMPLATE_ID\)/);
+  assert.match(brainProviderSource, /firstUsableGitHubOwnerFromProviders/);
+  assert.match(brainProviderSource, /const githubConnected = Boolean\(owner\)/);
 });
 
 test('OpenBrain local provider keeps configurable GBrain modes', () => {
