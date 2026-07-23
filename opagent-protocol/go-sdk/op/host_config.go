@@ -62,15 +62,24 @@ type ModelAutoStrategy struct {
 }
 
 type AuthConfig struct {
-	BaseURL       string `json:"baseURL,omitempty" mapstructure:"baseURL"`
-	Gateway       string `json:"gateway,omitempty" mapstructure:"gateway"`
-	AIGateway     string `json:"aiGateway,omitempty" mapstructure:"aiGateway"`
-	Token         string `json:"token,omitempty" mapstructure:"token"`
-	UID           string `json:"uid,omitempty" mapstructure:"uid"`
-	Email         string `json:"email,omitempty" mapstructure:"email"`
-	ActiveOrgID   string `json:"activeOrgID,omitempty" mapstructure:"activeOrgID"`
-	ActiveOrgName string `json:"activeOrgName,omitempty" mapstructure:"activeOrgName"`
-	UpdatedAt     int64  `json:"updatedAt,omitempty" mapstructure:"updatedAt"`
+	Version      int    `json:"version,omitempty" mapstructure:"version"`
+	BaseURL      string `json:"baseUrl,omitempty" mapstructure:"baseUrl"`
+	Gateway      string `json:"gateway,omitempty" mapstructure:"gateway"`
+	AIGateway    string `json:"aiGateway,omitempty" mapstructure:"aiGateway"`
+	Token        string `json:"token,omitempty" mapstructure:"token"`
+	UID          string `json:"uid,omitempty" mapstructure:"uid"`
+	Email        string `json:"email,omitempty" mapstructure:"email"`
+	DeploymentID string `json:"deploymentID,omitempty" mapstructure:"deploymentID"`
+	OrgID        string `json:"orgID,omitempty" mapstructure:"orgID"`
+	OrgSlug      string `json:"orgSlug,omitempty" mapstructure:"orgSlug"`
+	OrgName      string `json:"orgName,omitempty" mapstructure:"orgName"`
+	IdentityID   string `json:"identityID,omitempty" mapstructure:"identityID"`
+	ConnectionID string `json:"connectionID,omitempty" mapstructure:"connectionID"`
+	AuthMethod   string `json:"authMethod,omitempty" mapstructure:"authMethod"`
+	Assurance    string `json:"assurance,omitempty" mapstructure:"assurance"`
+	AuthTime     string `json:"authTime,omitempty" mapstructure:"authTime"`
+	ExpiresAt    string `json:"expiresAt,omitempty" mapstructure:"expiresAt"`
+	UpdatedAt    int64  `json:"updatedAt,omitempty" mapstructure:"updatedAt"`
 }
 
 // UserConfig is per-user runtime configuration.

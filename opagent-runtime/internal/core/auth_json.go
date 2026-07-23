@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 )
@@ -11,14 +12,21 @@ func AuthJSONPath(baseDir string) string {
 }
 
 type authJSON struct {
-	BaseURL   string `json:"baseUrl,omitempty"`
-	Gateway   string `json:"gateway,omitempty"`
-	AIGateway string `json:"aiGateway,omitempty"`
-	Token     string `json:"token"`
-	UID       string `json:"uid,omitempty"`
-	Email     string `json:"email,omitempty"`
-	Version   int    `json:"version,omitempty"`
-	UpdatedAt int64  `json:"updatedAt,omitempty"`
+	Version      int    `json:"version"`
+	BaseURL      string `json:"baseUrl,omitempty"`
+	Gateway      string `json:"gateway,omitempty"`
+	AIGateway    string `json:"aiGateway,omitempty"`
+	Token        string `json:"token"`
+	UID          string `json:"uid"`
+	Email        string `json:"email,omitempty"`
+	DeploymentID string `json:"deploymentID"`
+	OrgID        string `json:"orgID"`
+	IdentityID   string `json:"identityID"`
+	ConnectionID string `json:"connectionID"`
+	AuthMethod   string `json:"authMethod"`
+	AuthTime     string `json:"authTime"`
+	ExpiresAt    string `json:"expiresAt"`
+	UpdatedAt    int64  `json:"updatedAt,omitempty"`
 }
 
 func readAuthJSON(path string) (*authJSON, error) {
@@ -29,6 +37,11 @@ func readAuthJSON(path string) (*authJSON, error) {
 	var a authJSON
 	if err := json.Unmarshal(raw, &a); err != nil {
 		return nil, err
+	}
+	if a.Version != 2 || a.Token == "" || a.UID == "" || a.DeploymentID == "" ||
+		a.OrgID == "" || a.IdentityID == "" || a.ConnectionID == "" ||
+		a.AuthMethod == "" || a.AuthTime == "" || a.ExpiresAt == "" {
+		return nil, errors.New("tenant-bound auth config version 2 is required")
 	}
 	return &a, nil
 }

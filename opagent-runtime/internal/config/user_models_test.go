@@ -347,7 +347,7 @@ func TestLoadLocalUserConfig_ExpandsOpagentModelToOpagentAIGateway(t *testing.T)
     }
   }
 }`
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(authJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
 		t.Fatalf("write auth.json: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
@@ -412,7 +412,7 @@ func TestLoadLocalUserConfig_ExpandsOrgModelToOpagentAIGatewayWithOrgHeader(t *t
     }
   }
 }`
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(authJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
 		t.Fatalf("write auth.json: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
@@ -480,7 +480,7 @@ func TestLoadLocalUserConfig_ExpandsManagedOrgModelWithoutOrgPrefix(t *testing.T
     }
   }
 }`
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(authJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
 		t.Fatalf("write auth.json: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
@@ -562,7 +562,7 @@ func TestLoadLocalUserConfig_KeepsClaudeOpagentModelOnGatewayWhenNativeEnvPresen
     }
   }
 }`
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(authJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
 		t.Fatalf("write auth.json: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
@@ -641,7 +641,7 @@ func TestLoadLocalUserConfig_MigratesLegacySourceBasedSchema(t *testing.T) {
     }
   ]
 }`
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(authJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
 		t.Fatalf("write auth.json: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
@@ -706,7 +706,7 @@ func TestLoadLocalUserConfig_MigratesVersion3ProviderKeySchemaToProviders(t *tes
     }
   ]
 }`
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(authJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
 		t.Fatalf("write auth.json: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
@@ -1009,7 +1009,7 @@ func TestLoadLocalUserConfig_IgnoresInvalidNodesJSON(t *testing.T) {
     }
   }
 }`
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(authJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
 		t.Fatalf("write auth.json: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
