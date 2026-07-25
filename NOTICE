@@ -10,8 +10,8 @@ Attribution
 -----------
 
 If you modify, distribute, or offer as a network service any OpenBrain
-component licensed under AGPL-3.0 (including desktop, server, agents,
-opagent-runtime, opagent-protocol, tools, and related documentation),
+component licensed under AGPL-3.0 in this repository (including agents,
+skills, tools, opagent-runtime, opagent-protocol, and related documentation),
 you must:
 
 1. Comply with the GNU Affero General Public License v3.0, including
