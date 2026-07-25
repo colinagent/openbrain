@@ -55,7 +55,7 @@ OpenBrain Desktop 及其协作的本地 server 仍会以产品形式分发，但
 
 ## 发布
 
-OpenBrain 桌面安装包可从 GitHub Releases 获取。Runtime 自更新 manifest、runtime bundle、bootstrap 二进制和桌面更新元数据由公开下载入口 `https://download.op-agent.com` 提供。
+即使源码闭源，OpenBrain Desktop 安装包仍继续通过 GitHub Releases 公开下载。每个产品 Release 主动上传的资产只包括 macOS、Linux、Windows 三个平台的 Desktop 安装包。Runtime 自更新 manifest、runtime bundle、bootstrap 二进制和桌面更新元数据由公开下载入口 `https://download.op-agent.com` 提供。
 
 ## 许可证
 

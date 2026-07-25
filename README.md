@@ -61,7 +61,9 @@ For runtime or subagent changes, read [docs/runtime.md](docs/runtime.md) and
 
 ## Releases
 
-OpenBrain desktop installers are available from GitHub Releases. Runtime
+OpenBrain desktop installers remain available from GitHub Releases even though
+their source is proprietary. The uploaded assets for each product release are
+limited to the three Desktop downloads for macOS, Linux, and Windows. Runtime
 self-update manifests, runtime bundles, bootstrap binaries, and desktop update
 metadata are served from the public download endpoint:
 `https://download.op-agent.com`.
