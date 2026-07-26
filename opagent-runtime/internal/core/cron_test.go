@@ -898,7 +898,7 @@ func writeCronTestModelsJSON(t *testing.T, baseDir string, defaultChatModelKey s
 		t.Fatalf("MkdirAll(user config): %v", err)
 	}
 	raw := fmt.Sprintf(`{
-  "version": 5,
+  "version": 6,
   "defaultModelKey": "local-chat:auto-chat",
   "strategies": {
     "auto": {

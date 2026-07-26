@@ -13,25 +13,8 @@ import (
 )
 
 const defaultModelContextWindow int64 = 128000
-const localModelsSchemaVersion = 5
-const legacyLocalModelsSchemaVersion = 2
-const legacyProviderKeyModelsSchemaVersion = 3
-const previousProviderModelsSchemaVersion = 4
-const opagentProviderKey = "opagent"
-
-var upstreamModelIDNamespaces = map[string]struct{}{
-	"anthropic":  {},
-	"deepseek":   {},
-	"google":     {},
-	"meta-llama": {},
-	"mistral":    {},
-	"mistralai":  {},
-	"moonshotai": {},
-	"openai":     {},
-	"qwen":       {},
-	"x-ai":       {},
-	"z-ai":       {},
-}
+const localModelsSchemaVersion = 6
+const openbrainProviderKey = "openbrain"
 
 type localModelsJSON struct {
 	Version         int                           `json:"version"`
@@ -107,24 +90,7 @@ func normalizeLocalModelKey(value string) string {
 }
 
 func normalizeLocalProviderKey(value string) string {
-	provider := strings.ToLower(strings.TrimSpace(value))
-	if provider == "opagent-ai-gateway" {
-		return opagentProviderKey
-	}
-	return provider
-}
-
-func normalizePublicLocalModelID(value string) string {
-	modelID := strings.TrimSpace(value)
-	slash := strings.Index(modelID, "/")
-	if slash <= 0 || slash >= len(modelID)-1 {
-		return modelID
-	}
-	namespace := strings.ToLower(strings.TrimSpace(modelID[:slash]))
-	if _, ok := upstreamModelIDNamespaces[namespace]; !ok {
-		return modelID
-	}
-	return strings.TrimSpace(modelID[slash+1:])
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func NormalizeServiceTier(value string) string {
@@ -171,28 +137,8 @@ func isValidLocalProviderKey(value string) bool {
 	return true
 }
 
-func isManagedOpagentProviderKey(value string) bool {
-	provider := normalizeLocalProviderKey(value)
-	if provider == opagentProviderKey {
-		return true
-	}
-	if !strings.HasPrefix(provider, "org-") {
-		return false
-	}
-	if len(provider) < len("org-a") || len(provider) > len("org-")+63 {
-		return false
-	}
-	for i, r := range provider {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
-			if i == len("org-") && r == '-' {
-				return false
-			}
-			continue
-		}
-		return false
-	}
-	last := provider[len(provider)-1]
-	return last >= 'a' && last <= 'z' || last >= '0' && last <= '9'
+func isManagedOpenBrainProviderKey(value string) bool {
+	return normalizeLocalProviderKey(value) == openbrainProviderKey
 }
 
 func defaultLocalProviderKeyForAPI(api string) string {
@@ -220,19 +166,19 @@ func buildLocalModelKey(provider, id string) string {
 
 func managedLocalProviderKeys(raw localModelsJSON) map[string]struct{} {
 	keys := make(map[string]struct{}, len(raw.Providers))
-	for rawProviderKey, provider := range raw.Providers {
+	for rawProviderKey := range raw.Providers {
 		providerKey := normalizeLocalProviderKey(rawProviderKey)
 		if providerKey == "" {
 			continue
 		}
-		if provider.Managed || isManagedOpagentProviderKey(providerKey) {
+		if isManagedOpenBrainProviderKey(providerKey) {
 			keys[providerKey] = struct{}{}
 		}
 	}
 	return keys
 }
 
-func normalizeManagedLocalModelKey(value string, managedProviderKeys map[string]struct{}) string {
+func normalizeManagedLocalModelKey(value string, _ map[string]struct{}) string {
 	key := normalizeLocalModelKey(value)
 	separator := strings.Index(key, ":")
 	if separator <= 0 || separator >= len(key)-1 {
@@ -243,145 +189,7 @@ func normalizeManagedLocalModelKey(value string, managedProviderKeys map[string]
 		return key
 	}
 	modelID := strings.TrimSpace(key[separator+1:])
-	if _, ok := managedProviderKeys[providerKey]; ok {
-		modelID = normalizePublicLocalModelID(modelID)
-	}
 	return buildLocalModelKey(providerKey, modelID)
-}
-
-func migrateLocalModelsConfig(raw localModelsJSON) (localModelsJSON, error) {
-	if raw.Version == previousProviderModelsSchemaVersion {
-		raw.Version = localModelsSchemaVersion
-		return raw, nil
-	}
-	if raw.Version != legacyLocalModelsSchemaVersion && raw.Version != legacyProviderKeyModelsSchemaVersion {
-		return raw, nil
-	}
-
-	type migratedProviderModel struct {
-		entry   localProviderModelEntry
-		baseURL string
-		apiKey  string
-	}
-	type migratedProvider struct {
-		label  string
-		models []migratedProviderModel
-	}
-
-	providers := make(map[string]migratedProvider)
-	keyMap := make(map[string]string, len(raw.Models))
-	for _, item := range raw.Models {
-		rawID := strings.TrimSpace(item.ID)
-		if rawID == "" {
-			continue
-		}
-		legacyKey := normalizeLocalModelKey(item.Key)
-		if legacyKey == "" && strings.TrimSpace(item.Source) != "" {
-			legacyKey = strings.ToLower(strings.TrimSpace(item.Source)) + ":" + rawID
-		}
-		providerKey := opagentProviderKey
-		if raw.Version == legacyLocalModelsSchemaVersion {
-			if strings.ToLower(strings.TrimSpace(item.Source)) != "gateway" {
-				providerKey = normalizeLocalProviderKey(item.Provider)
-				if providerKey == "" {
-					providerKey = defaultLocalProviderKeyForAPI(item.API)
-				}
-			}
-		} else {
-			providerKey = normalizeLocalProviderKey(item.Provider)
-			if providerKey == "" {
-				providerKey = defaultLocalProviderKeyForAPI(item.API)
-			}
-		}
-		id := rawID
-		if isManagedOpagentProviderKey(providerKey) {
-			id = normalizePublicLocalModelID(rawID)
-		}
-		nextKey := buildLocalModelKey(providerKey, id)
-		if legacyKey != "" && nextKey != "" {
-			keyMap[legacyKey] = nextKey
-		}
-
-		provider := providers[providerKey]
-		if provider.label == "" {
-			provider.label = strings.TrimSpace(item.ProviderLabel)
-		}
-		provider.models = append(provider.models, migratedProviderModel{
-			entry: localProviderModelEntry{
-				Key:              nextKey,
-				ID:               id,
-				Label:            item.Label,
-				Enabled:          item.Enabled,
-				API:              strings.TrimSpace(item.API),
-				ContextWindow:    item.ContextWindow,
-				MaxOutputTokens:  item.MaxOutputTokens,
-				Reasoning:        item.Reasoning,
-				ReasoningControl: item.ReasoningControl,
-				ReasoningLevels:  item.ReasoningLevels,
-				ServiceTiers:     normalizeServiceTierList(item.ServiceTiers),
-			},
-			baseURL: strings.TrimSpace(item.BaseURL),
-			apiKey:  strings.TrimSpace(item.APIKey),
-		})
-		providers[providerKey] = provider
-	}
-
-	migratedProviders := make(map[string]localProviderEntry, len(providers))
-	for providerKey, provider := range providers {
-		next := localProviderEntry{Label: provider.label}
-		if isManagedOpagentProviderKey(providerKey) {
-			next.Managed = true
-			next.Models = make([]localProviderModelEntry, 0, len(provider.models))
-			for _, model := range provider.models {
-				next.Models = append(next.Models, model.entry)
-			}
-			migratedProviders[providerKey] = next
-			continue
-		}
-
-		baseURLCounts := make(map[string]int)
-		apiKeyCounts := make(map[string]int)
-		for _, model := range provider.models {
-			if model.baseURL != "" {
-				baseURLCounts[model.baseURL]++
-			}
-			if model.apiKey != "" {
-				apiKeyCounts[model.apiKey]++
-			}
-		}
-		if len(baseURLCounts) == 1 {
-			for value := range baseURLCounts {
-				next.BaseURL = value
-			}
-		}
-		if len(apiKeyCounts) == 1 {
-			for value := range apiKeyCounts {
-				next.APIKey = value
-			}
-		}
-		next.Models = make([]localProviderModelEntry, 0, len(provider.models))
-		for _, model := range provider.models {
-			entry := model.entry
-			if model.baseURL != "" && model.baseURL != next.BaseURL {
-				entry.BaseURL = model.baseURL
-			}
-			if model.apiKey != "" && model.apiKey != next.APIKey {
-				entry.APIKey = model.apiKey
-			}
-			next.Models = append(next.Models, entry)
-		}
-		migratedProviders[providerKey] = next
-	}
-
-	migratedDefaultModelKey := keyMap[normalizeLocalModelKey(raw.DefaultModelKey)]
-	if migratedDefaultModelKey == "" {
-		migratedDefaultModelKey = normalizeLocalModelKey(raw.DefaultModelKey)
-	}
-	return localModelsJSON{
-		Version:         localModelsSchemaVersion,
-		DefaultModelKey: migratedDefaultModelKey,
-		Providers:       migratedProviders,
-	}, nil
 }
 
 func flattenLocalProviders(raw localModelsJSON) ([]localModelEntry, error) {
@@ -413,26 +221,22 @@ func flattenLocalProviders(raw localModelsJSON) ([]localModelEntry, error) {
 		providerAPI := strings.TrimSpace(provider.API)
 		providerBaseURL := strings.TrimSpace(provider.BaseURL)
 		providerAPIKey := strings.TrimSpace(provider.APIKey)
-		managedProvider := provider.Managed || isManagedOpagentProviderKey(providerKey)
+		if provider.Managed && providerKey != openbrainProviderKey {
+			return nil, fmt.Errorf("models.json managed provider must use reserved key %s", openbrainProviderKey)
+		}
+		managedProvider := isManagedOpenBrainProviderKey(providerKey)
 		for _, item := range provider.Models {
 			rawID := strings.TrimSpace(item.ID)
 			if rawID == "" {
 				return nil, fmt.Errorf("models.json provider %s model id is required", providerKey)
 			}
 			id := rawID
-			if managedProvider {
-				id = normalizePublicLocalModelID(rawID)
-			}
 			expectedKey := buildLocalModelKey(providerKey, id)
 			key := normalizeLocalModelKey(item.Key)
 			if key == "" {
 				key = expectedKey
 			}
-			legacyExpectedKey := ""
-			if rawID != id {
-				legacyExpectedKey = buildLocalModelKey(providerKey, rawID)
-			}
-			if key != expectedKey && key != legacyExpectedKey {
+			if key != expectedKey {
 				return nil, fmt.Errorf("models.json model %s key must be %s", id, expectedKey)
 			}
 			api := strings.TrimSpace(item.API)
@@ -620,10 +424,6 @@ func loadLocalUserConfig(baseDir string) (*op.UserConfig, error) {
 		}
 		return userCfg, nil
 	}
-	modelsSource, err = migrateLocalModelsConfig(modelsSource)
-	if err != nil {
-		return nil, err
-	}
 	if err := validateLocalModelsConfig(modelsSource); err != nil {
 		return nil, err
 	}
@@ -780,7 +580,7 @@ func toModelConfig(item localModelEntry, gatewayBaseURL, gatewayToken string) (*
 	if key != expectedKey {
 		return nil, false, fmt.Errorf("models.json model %s key must be %s", id, expectedKey)
 	}
-	if item.Managed || isManagedOpagentProviderKey(providerKey) {
+	if item.Managed || isManagedOpenBrainProviderKey(providerKey) {
 		if gatewayBaseURL == "" || gatewayToken == "" {
 			return nil, false, nil
 		}
@@ -796,7 +596,7 @@ func toModelConfig(item localModelEntry, gatewayBaseURL, gatewayToken string) (*
 			Source:           providerKey,
 			APIKey:           gatewayToken,
 			BaseURL:          gatewayAPIBaseURL(gatewayBaseURL),
-			Headers:          gatewayHeadersForProvider(providerKey),
+			Headers:          nil,
 			ContextWindow:    contextWindow,
 			MaxOutputTokens:  item.MaxOutputTokens,
 			Reasoning:        reasoning,
@@ -832,14 +632,6 @@ func toModelConfig(item localModelEntry, gatewayBaseURL, gatewayToken string) (*
 		ServiceTiers:     serviceTiers,
 		Enabled:          true,
 	}, true, nil
-}
-
-func gatewayHeadersForProvider(providerKey string) map[string]string {
-	providerKey = normalizeLocalProviderKey(providerKey)
-	if providerKey == "" || providerKey == opagentProviderKey {
-		return nil
-	}
-	return map[string]string{"X-Org-ID": providerKey}
 }
 
 func resolveAIGatewayBaseURL(auth *op.AuthConfig) string {

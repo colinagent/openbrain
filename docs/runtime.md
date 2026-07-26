@@ -285,6 +285,15 @@ Runtime model selection is explicit and meta-driven:
 - Enabled models are user/config choices; runtime availability still depends on
   a usable local provider/API configuration for the concrete `modelKey`.
 
+Managed catalog entries in `models.json` use schema version 6 and one reserved
+provider key: `openbrain`. Their stable model keys have the form
+`openbrain:<logical-model-id>`. Tenant or organization switches do not rewrite
+those keys because the authenticated session, not a provider alias or request
+header, supplies tenant context. Runtime rejects managed `cloud`, `opagent`,
+and organization-derived provider keys, and managed model requests never send
+`X-Org-ID`. Local custom providers remain separate and continue to supply their
+own endpoint and API credentials.
+
 When a parent delegates through `agent_task`, the child uses its own
 `AGENT.md model:` when present. Otherwise runtime inherits the parent loop's
 explicit `modelKey`. Endpoint agents receive only the resolved model key in

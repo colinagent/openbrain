@@ -639,7 +639,7 @@ func TestScanAgents_DiscoversPrivateSubagentsWithoutMountingThem(t *testing.T) {
 func TestScanAgents_ParsesModelFrontmatterAsModelKey(t *testing.T) {
 	config.SetSystem(&op.SystemConfig{HostID: "test-host", Env: op.EnvLocal})
 	baseDir := t.TempDir()
-	writeScannerTestFile(t, filepath.Join(baseDir, "agent-a", ".agent", "AGENT.md"), "---\nname: agent-a\nmodel: opagent:gpt-5.4\n---\nagent prompt\n")
+	writeScannerTestFile(t, filepath.Join(baseDir, "agent-a", ".agent", "AGENT.md"), "---\nname: agent-a\nmodel: openbrain:gpt-5.4\n---\nagent prompt\n")
 
 	scanner := NewScanner("user", baseDir)
 	got := scanner.ScanAgents(baseDir, 0)
@@ -653,8 +653,8 @@ func TestScanAgents_ParsesModelFrontmatterAsModelKey(t *testing.T) {
 	if meta.Name != "agent-a" {
 		t.Fatalf("agent name = %q, want agent-a", meta.Name)
 	}
-	if meta.Model != "opagent:gpt-5.4" {
-		t.Fatalf("agent model = %q, want opagent:gpt-5.4", meta.Model)
+	if meta.Model != "openbrain:gpt-5.4" {
+		t.Fatalf("agent model = %q, want openbrain:gpt-5.4", meta.Model)
 	}
 }
 

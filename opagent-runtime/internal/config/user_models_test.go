@@ -1,6 +1,8 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -20,10 +22,10 @@ func TestLoadLocalUserConfig_PreservesReasoningLevels(t *testing.T) {
 	}
 
 	modelsJSON := `{
-  "version": 4,
+  "version": 6,
   "defaultModelKey": "openai:custom-gpt",
   "providers": {
-    "opagent": {
+    "openbrain": {
       "models": [
         {
           "id": "auto",
@@ -85,7 +87,7 @@ func TestLoadLocalUserConfig_InfersToggleReasoningControlWithoutLevels(t *testin
 	}
 
 	modelsJSON := `{
-  "version": 4,
+  "version": 6,
   "defaultModelKey": "openai:kimi-4.6",
   "providers": {
     "openai": {
@@ -126,10 +128,10 @@ func TestLoadLocalUserConfig_CustomModelUsesIDAsRuntimeName(t *testing.T) {
 	}
 
 	modelsJSON := `{
-  "version": 4,
+  "version": 6,
   "defaultModelKey": "anthropic:claude-opus-4-6",
   "providers": {
-    "opagent": {
+    "openbrain": {
       "models": [
         {
           "id": "auto",
@@ -261,7 +263,7 @@ func TestGetModelConfig_PrefersStableKeyWhenIDsCollide(t *testing.T) {
 	setUserConfig(&op.UserConfig{
 		Models: []op.ModelConfig{
 			{
-				Key:      "opagent:gpt-5.4",
+				Key:      "openbrain:gpt-5.4",
 				ID:       "gpt-5.4",
 				Name:     "gpt-5.4",
 				Provider: "opagent-ai-gateway",
@@ -269,7 +271,7 @@ func TestGetModelConfig_PrefersStableKeyWhenIDsCollide(t *testing.T) {
 				APIKey:   "gateway-token",
 				BaseURL:  "https://ai-gateway.openbrain.work/v1",
 				Enabled:  true,
-				Source:   "opagent",
+				Source:   "openbrain",
 			},
 			{
 				Key:      "openai:gpt-5.4",
@@ -288,9 +290,9 @@ func TestGetModelConfig_PrefersStableKeyWhenIDsCollide(t *testing.T) {
 	modelcache.Flush()
 	warmModelCacheFromUserConfig()
 
-	opagentModel, err := GetModelConfig("opagent:gpt-5.4")
+	opagentModel, err := GetModelConfig("openbrain:gpt-5.4")
 	if err != nil {
-		t.Fatalf("GetModelConfig(opagent:gpt-5.4): %v", err)
+		t.Fatalf("GetModelConfig(openbrain:gpt-5.4): %v", err)
 	}
 	if opagentModel.Provider != "opagent-ai-gateway" {
 		t.Fatalf("opagent provider = %q, want opagent-ai-gateway", opagentModel.Provider)
@@ -309,7 +311,7 @@ func TestGetModelConfig_PrefersStableKeyWhenIDsCollide(t *testing.T) {
 	}
 }
 
-func TestLoadLocalUserConfig_ExpandsOpagentModelToOpagentAIGateway(t *testing.T) {
+func TestLoadLocalUserConfig_ExpandsOpenBrainModelWithoutTenantHeader(t *testing.T) {
 	baseDir := t.TempDir()
 	userDir := filepath.Join(baseDir, "configs", "user")
 	if err := os.MkdirAll(userDir, 0o755); err != nil {
@@ -327,10 +329,10 @@ func TestLoadLocalUserConfig_ExpandsOpagentModelToOpagentAIGateway(t *testing.T)
   "activeOrgName": "Acme"
 }`
 	modelsJSON := `{
-  "version": 4,
-  "defaultModelKey": "opagent:gpt-5",
+  "version": 6,
+  "defaultModelKey": "openbrain:gpt-5",
   "providers": {
-    "opagent": {
+    "openbrain": {
       "models": [
         {
           "id": "auto",
@@ -377,150 +379,58 @@ func TestLoadLocalUserConfig_ExpandsOpagentModelToOpagentAIGateway(t *testing.T)
 	if model.APIKey != "session-token" {
 		t.Fatalf("APIKey = %q, want session-token", model.APIKey)
 	}
+	if model.Source != "openbrain" {
+		t.Fatalf("Source = %q, want openbrain", model.Source)
+	}
 	if got := model.Headers["X-Org-ID"]; got != "" {
-		t.Fatalf("default opagent model X-Org-ID header = %q, want empty", got)
+		t.Fatalf("OpenBrain model X-Org-ID header = %q, want empty", got)
 	}
 }
 
-func TestLoadLocalUserConfig_ExpandsOrgModelToOpagentAIGatewayWithOrgHeader(t *testing.T) {
-	baseDir := t.TempDir()
-	userDir := filepath.Join(baseDir, "configs", "user")
-	if err := os.MkdirAll(userDir, 0o755); err != nil {
-		t.Fatalf("mkdir user dir: %v", err)
-	}
-	authJSON := `{
-  "version": 1,
-  "baseUrl": "https://www.openbrain.io",
-  "gateway": "https://gateway.openbrain.work",
-  "aiGateway": "https://ai-gateway.openbrain.work",
-  "token": "session-token",
-  "uid": "user-test"
-}`
+func TestLoadLocalUserConfig_PreservesExactManagedLogicalModelID(t *testing.T) {
 	modelsJSON := `{
-  "version": 4,
-  "defaultModelKey": "org-acme:gpt-5",
+  "version": 6,
+  "defaultModelKey": "openbrain:openai/gpt-5",
   "providers": {
-    "org-acme": {
-      "label": "Acme",
-      "models": [
-        {
-          "id": "gpt-5",
-          "enabled": true,
-          "api": "openai-responses"
-        }
-      ]
-    }
-  }
-}`
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
-		t.Fatalf("write auth.json: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
-		t.Fatalf("write models.json: %v", err)
-	}
-
-	userCfg, err := loadLocalUserConfig(baseDir)
-	if err != nil {
-		t.Fatalf("loadLocalUserConfig(): %v", err)
-	}
-	if len(userCfg.Models) != 1 {
-		t.Fatalf("len(userCfg.Models) = %d, want 1", len(userCfg.Models))
-	}
-	model := userCfg.Models[0]
-	if model.Key != "org-acme:gpt-5" {
-		t.Fatalf("Key = %q, want org-acme:gpt-5", model.Key)
-	}
-	if model.Provider != "opagent-ai-gateway" {
-		t.Fatalf("Provider = %q, want opagent-ai-gateway", model.Provider)
-	}
-	if model.Source != "org-acme" {
-		t.Fatalf("Source = %q, want org-acme", model.Source)
-	}
-	if model.BaseURL != "https://ai-gateway.openbrain.work/v1" {
-		t.Fatalf("BaseURL = %q, want gateway llm url", model.BaseURL)
-	}
-	if model.APIKey != "session-token" {
-		t.Fatalf("APIKey = %q, want session-token", model.APIKey)
-	}
-	if model.Headers["X-Org-ID"] != "org-acme" {
-		t.Fatalf("X-Org-ID header = %q, want org-acme", model.Headers["X-Org-ID"])
-	}
-}
-
-func TestLoadLocalUserConfig_ExpandsManagedOrgModelWithoutOrgPrefix(t *testing.T) {
-	baseDir := t.TempDir()
-	userDir := filepath.Join(baseDir, "configs", "user")
-	if err := os.MkdirAll(userDir, 0o755); err != nil {
-		t.Fatalf("mkdir user dir: %v", err)
-	}
-	authJSON := `{
-  "version": 1,
-  "baseUrl": "https://www.openbrain.io",
-  "aiGateway": "https://www.openbrain.io/ai",
-  "token": "session-token",
-  "uid": "user-test"
-}`
-	modelsJSON := `{
-  "version": 5,
-  "defaultModelKey": "lt:openai/gpt-5.5",
-  "providers": {
-    "lt": {
-      "label": "lt",
+    "openbrain": {
       "managed": true,
-      "models": [
-        {
-          "id": "openai/gpt-5.5",
-          "label": "GPT-5.5",
-          "enabled": true,
-          "api": "openai-completions",
-          "reasoning": true,
-          "reasoningLevels": ["low", "medium", "high", "xhigh"]
-        }
-      ]
+      "models": [{"key":"openbrain:openai/gpt-5","id":"openai/gpt-5","enabled":true,"api":"openai-responses"}]
     }
   }
 }`
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
-		t.Fatalf("write auth.json: %v", err)
+	var raw localModelsJSON
+	if err := json.Unmarshal([]byte(modelsJSON), &raw); err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
-		t.Fatalf("write models.json: %v", err)
+	if err := validateLocalModelsConfig(raw); err != nil {
+		t.Fatalf("validateLocalModelsConfig(): %v", err)
 	}
-
-	userCfg, err := loadLocalUserConfig(baseDir)
+	models, err := flattenLocalProviders(raw)
 	if err != nil {
-		t.Fatalf("loadLocalUserConfig(): %v", err)
+		t.Fatalf("flattenLocalProviders(): %v", err)
 	}
-	if len(userCfg.Models) != 1 {
-		t.Fatalf("len(userCfg.Models) = %d, want 1", len(userCfg.Models))
+	if models[0].Key != "openbrain:openai/gpt-5" || models[0].ID != "openai/gpt-5" {
+		t.Fatalf("managed model identity changed: key=%q id=%q", models[0].Key, models[0].ID)
 	}
-	model := userCfg.Models[0]
-	if userCfg.DefaultModelKey != "lt:gpt-5.5" {
-		t.Fatalf("DefaultModelKey = %q, want lt:gpt-5.5", userCfg.DefaultModelKey)
-	}
-	if model.Key != "lt:gpt-5.5" {
-		t.Fatalf("Key = %q, want lt:gpt-5.5", model.Key)
-	}
-	if model.ID != "gpt-5.5" {
-		t.Fatalf("ID = %q, want gpt-5.5", model.ID)
-	}
-	if model.Name != "gpt-5.5" {
-		t.Fatalf("Name = %q, want gpt-5.5", model.Name)
-	}
-	if model.Provider != "opagent-ai-gateway" {
-		t.Fatalf("Provider = %q, want opagent-ai-gateway", model.Provider)
-	}
-	if model.Source != "lt" {
-		t.Fatalf("Source = %q, want lt", model.Source)
-	}
-	if model.BaseURL != "https://www.openbrain.io/ai/v1" {
-		t.Fatalf("BaseURL = %q, want https://www.openbrain.io/ai/v1", model.BaseURL)
-	}
-	if model.APIKey != "session-token" {
-		t.Fatalf("APIKey = %q, want session-token", model.APIKey)
-	}
-	if model.Headers["X-Org-ID"] != "lt" {
-		t.Fatalf("X-Org-ID header = %q, want lt", model.Headers["X-Org-ID"])
+}
+
+func TestLoadLocalUserConfig_RejectsLegacyManagedProviderKeys(t *testing.T) {
+	for _, providerKey := range []string{"cloud", "opagent", "org-acme"} {
+		t.Run(providerKey, func(t *testing.T) {
+			baseDir := t.TempDir()
+			userDir := filepath.Join(baseDir, "configs", "user")
+			if err := os.MkdirAll(userDir, 0o755); err != nil {
+				t.Fatalf("mkdir user dir: %v", err)
+			}
+			modelsJSON := fmt.Sprintf(`{"version":6,"defaultModelKey":%q,"providers":{%q:{"managed":true,"models":[{"id":"gpt-5","enabled":true,"api":"openai-responses"}]}}}`, providerKey+":gpt-5", providerKey)
+			if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
+				t.Fatalf("write models.json: %v", err)
+			}
+			_, err := loadLocalUserConfig(baseDir)
+			if err == nil || !strings.Contains(err.Error(), "managed provider must use reserved key openbrain") {
+				t.Fatalf("loadLocalUserConfig() error = %v", err)
+			}
+		})
 	}
 }
 
@@ -540,10 +450,10 @@ func TestLoadLocalUserConfig_KeepsClaudeOpagentModelOnGatewayWhenNativeEnvPresen
   "key": "user-test"
 }`
 	modelsJSON := `{
-  "version": 4,
-  "defaultModelKey": "opagent:claude-opus-4-6",
+  "version": 6,
+  "defaultModelKey": "openbrain:claude-opus-4-6",
   "providers": {
-    "opagent": {
+    "openbrain": {
       "models": [
         {
           "id": "auto",
@@ -599,190 +509,6 @@ func TestLoadLocalUserConfig_KeepsClaudeOpagentModelOnGatewayWhenNativeEnvPresen
 	}
 }
 
-func TestLoadLocalUserConfig_MigratesLegacySourceBasedSchema(t *testing.T) {
-	baseDir := t.TempDir()
-	userDir := filepath.Join(baseDir, "configs", "user")
-	if err := os.MkdirAll(userDir, 0o755); err != nil {
-		t.Fatalf("mkdir user dir: %v", err)
-	}
-	authJSON := `{
-  "version": 1,
-  "aiGateway": "https://ai-gateway.openbrain.work",
-  "token": "session-token",
-  "uid": "user-test"
-}`
-	modelsJSON := `{
-  "version": 2,
-  "defaultModelKey": "gateway:gpt-5.4",
-  "models": [
-    {
-      "key": "auto",
-      "id": "auto",
-      "enabled": true,
-      "source": "gateway",
-      "api": "openai-completions"
-    },
-    {
-      "key": "gateway:gpt-5.4",
-      "id": "gpt-5.4",
-      "enabled": true,
-      "source": "gateway",
-      "api": "openai-responses"
-    },
-    {
-      "key": "custom:gpt-5.4",
-      "id": "gpt-5.4",
-      "enabled": true,
-      "source": "custom",
-      "provider": "openai",
-      "api": "openai-responses",
-      "baseUrl": "https://api.openai.com/v1",
-      "apiKey": "custom-token"
-    }
-  ]
-}`
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
-		t.Fatalf("write auth.json: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
-		t.Fatalf("write models.json: %v", err)
-	}
-
-	userCfg, err := loadLocalUserConfig(baseDir)
-	if err != nil {
-		t.Fatalf("loadLocalUserConfig(): %v", err)
-	}
-	if len(userCfg.Models) != 3 {
-		t.Fatalf("len(userCfg.Models) = %d, want 3", len(userCfg.Models))
-	}
-	if userCfg.Models[1].Key != "opagent:gpt-5.4" {
-		t.Fatalf("migrated opagent ID = %q, want opagent:gpt-5.4", userCfg.Models[1].Key)
-	}
-	if userCfg.Models[2].Key != "openai:gpt-5.4" {
-		t.Fatalf("migrated provider key = %q, want openai:gpt-5.4", userCfg.Models[2].Key)
-	}
-}
-
-func TestLoadLocalUserConfig_MigratesVersion3ProviderKeySchemaToProviders(t *testing.T) {
-	baseDir := t.TempDir()
-	userDir := filepath.Join(baseDir, "configs", "user")
-	if err := os.MkdirAll(userDir, 0o755); err != nil {
-		t.Fatalf("mkdir user dir: %v", err)
-	}
-	authJSON := `{
-  "version": 1,
-  "aiGateway": "https://ai-gateway.openbrain.work",
-  "token": "session-token",
-  "uid": "user-test"
-}`
-	modelsJSON := `{
-  "version": 3,
-  "defaultModelKey": "openai:gpt-5-mini",
-  "models": [
-    {
-      "key": "auto",
-      "id": "auto",
-      "enabled": true,
-      "provider": "opagent",
-      "api": "openai-completions"
-    },
-    {
-      "key": "openai:gpt-5.4",
-      "id": "gpt-5.4",
-      "enabled": true,
-      "provider": "openai",
-      "api": "openai-responses",
-      "baseUrl": "https://api.openai.com/v1",
-      "apiKey": "openai-key"
-    },
-    {
-      "key": "openai:gpt-5-mini",
-      "id": "gpt-5-mini",
-      "enabled": true,
-      "provider": "openai",
-      "api": "openai-responses",
-      "baseUrl": "https://api.openai.com/v1",
-      "apiKey": "openai-key"
-    }
-  ]
-}`
-	if err := os.WriteFile(filepath.Join(userDir, "auth.json"), []byte(tenantBoundAuthFixture(authJSON)), 0o644); err != nil {
-		t.Fatalf("write auth.json: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
-		t.Fatalf("write models.json: %v", err)
-	}
-
-	userCfg, err := loadLocalUserConfig(baseDir)
-	if err != nil {
-		t.Fatalf("loadLocalUserConfig(): %v", err)
-	}
-	if len(userCfg.Models) != 3 {
-		t.Fatalf("len(userCfg.Models) = %d, want 3", len(userCfg.Models))
-	}
-	if userCfg.Models[1].Key != "openai:gpt-5.4" {
-		t.Fatalf("migrated provider key = %q, want openai:gpt-5.4", userCfg.Models[1].Key)
-	}
-	if userCfg.Models[2].Key != "openai:gpt-5-mini" {
-		t.Fatalf("migrated provider key = %q, want openai:gpt-5-mini", userCfg.Models[2].Key)
-	}
-}
-
-func TestLoadLocalUserConfig_MigratesVersion3ProviderKeySchemaWithPerModelEndpointOverrides(t *testing.T) {
-	baseDir := t.TempDir()
-	userDir := filepath.Join(baseDir, "configs", "user")
-	if err := os.MkdirAll(userDir, 0o755); err != nil {
-		t.Fatalf("mkdir user dir: %v", err)
-	}
-	modelsJSON := `{
-  "version": 3,
-  "defaultModelKey": "openai:gpt-5.4",
-  "models": [
-    {
-      "key": "auto",
-      "id": "auto",
-      "enabled": true,
-      "provider": "opagent",
-      "api": "openai-completions"
-    },
-    {
-      "key": "openai:gpt-5.4",
-      "id": "gpt-5.4",
-      "enabled": true,
-      "provider": "openai",
-      "api": "openai-responses",
-      "baseUrl": "https://api.openai.com/v1",
-      "apiKey": "key-a"
-    },
-    {
-      "key": "openai:gpt-5-mini",
-      "id": "gpt-5-mini",
-      "enabled": true,
-      "provider": "openai",
-      "api": "openai-responses",
-      "baseUrl": "https://proxy.example.com/v1",
-      "apiKey": "key-a"
-    }
-  ]
-}`
-	if err := os.WriteFile(filepath.Join(userDir, "models.json"), []byte(modelsJSON), 0o644); err != nil {
-		t.Fatalf("write models.json: %v", err)
-	}
-
-	userCfg, err := loadLocalUserConfig(baseDir)
-	if err != nil {
-		t.Fatalf("loadLocalUserConfig(): %v", err)
-	}
-	if len(userCfg.Models) != 2 {
-		t.Fatalf("len(userCfg.Models) = %d, want 2", len(userCfg.Models))
-	}
-	baseURLs := []string{userCfg.Models[0].BaseURL, userCfg.Models[1].BaseURL}
-	sort.Strings(baseURLs)
-	if !reflect.DeepEqual(baseURLs, []string{"https://api.openai.com/v1", "https://proxy.example.com/v1"}) {
-		t.Fatalf("baseURLs = %#v, want migrated per-model endpoints", baseURLs)
-	}
-}
-
 func TestLoadLocalUserConfig_AllowsVersion4CustomProviderWithPerModelOverrides(t *testing.T) {
 	baseDir := t.TempDir()
 	userDir := filepath.Join(baseDir, "configs", "user")
@@ -791,10 +517,10 @@ func TestLoadLocalUserConfig_AllowsVersion4CustomProviderWithPerModelOverrides(t
 	}
 
 	modelsJSON := `{
-  "version": 4,
+  "version": 6,
   "defaultModelKey": "codemirror:gpt-5.4",
   "providers": {
-    "opagent": {
+    "openbrain": {
       "models": [
         {
           "id": "auto",
@@ -864,7 +590,7 @@ func TestLoadLocalUserConfig_RejectsDefaultModelKeyWhenOnlyLegacyAutoExists(t *t
 	}
 
 	modelsJSON := `{
-  "version": 4,
+  "version": 6,
   "defaultModelKey": "auto",
   "providers": {
     "openai": {
@@ -902,7 +628,7 @@ func TestLoadLocalUserConfig_RejectsDisabledDefaultChatModel(t *testing.T) {
 	}
 
 	modelsJSON := `{
-  "version": 5,
+  "version": 6,
   "defaultModelKey": "openai:gpt-5.4",
   "strategies": {
     "auto": {
@@ -954,7 +680,7 @@ func TestLoadLocalUserConfig_RejectsLegacyModelSchema(t *testing.T) {
     {
       "id": "gpt-5",
       "enabled": true,
-      "provider": "opagent",
+      "provider": "openbrain",
       "api": "openai-responses"
     }
   ]
@@ -967,7 +693,7 @@ func TestLoadLocalUserConfig_RejectsLegacyModelSchema(t *testing.T) {
 	if err == nil {
 		t.Fatalf("loadLocalUserConfig() expected error")
 	}
-	if !strings.Contains(err.Error(), "version must be 5") {
+	if !strings.Contains(err.Error(), "version must be 6") {
 		t.Fatalf("error = %v, want version validation", err)
 	}
 }
@@ -995,10 +721,10 @@ func TestLoadLocalUserConfig_IgnoresInvalidNodesJSON(t *testing.T) {
   "uid": "user-test"
 }`
 	modelsJSON := `{
-  "version": 5,
-  "defaultModelKey": "opagent:gpt-5",
+  "version": 6,
+  "defaultModelKey": "openbrain:gpt-5",
   "providers": {
-    "opagent": {
+    "openbrain": {
       "models": [
         {
           "id": "gpt-5",

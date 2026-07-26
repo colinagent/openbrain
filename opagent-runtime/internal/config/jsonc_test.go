@@ -50,7 +50,7 @@ func TestLoadLocalUserConfigAllowsComments(t *testing.T) {
   "token": "token-value"
 }`
 	modelsJSON := `{
-  "version": 5,
+  "version": 6,
   "defaultModelKey": "openai:gpt-jsonc",
   "providers": {
     "openai": {

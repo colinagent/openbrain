@@ -50,10 +50,10 @@ func TestNewModelClient_OpenAIResponsesUsesNativeCanonicalProvider(t *testing.T)
   "uid": "user-test"
 }`
 	modelsJSON := `{
-  "version": 4,
-  "defaultModelKey": "opagent:gpt-5.4",
+  "version": 6,
+  "defaultModelKey": "openbrain:gpt-5.4",
   "providers": {
-    "opagent": {
+    "openbrain": {
       "models": [
         {
           "id": "gpt-5.4",
@@ -77,7 +77,7 @@ func TestNewModelClient_OpenAIResponsesUsesNativeCanonicalProvider(t *testing.T)
 		t.Fatalf("LoadLocalUserProfile(): %v", err)
 	}
 
-	model, err := NewModelClient(context.Background(), "opagent:gpt-5.4", nil)
+	model, err := NewModelClient(context.Background(), "openbrain:gpt-5.4", nil)
 	if err != nil {
 		t.Fatalf("NewModelClient(): %v", err)
 	}
@@ -96,7 +96,7 @@ func TestNewModelClient_RequiresExplicitModelKey(t *testing.T) {
 		t.Fatalf("mkdir user dir: %v", err)
 	}
 	modelsJSON := `{
-  "version": 5,
+  "version": 6,
   "defaultModelKey": "local-one:first",
   "providers": {
     "local-one": {
@@ -132,7 +132,7 @@ func TestNewModelClient_UsesMetaModelKeyWhenModelIDIsEmpty(t *testing.T) {
 		t.Fatalf("mkdir user dir: %v", err)
 	}
 	modelsJSON := `{
-  "version": 5,
+  "version": 6,
   "defaultModelKey": "local-one:first",
   "providers": {
     "local-one": {
@@ -176,7 +176,7 @@ func TestNewModelClient_IgnoresLegacyMetaModel(t *testing.T) {
 		t.Fatalf("mkdir user dir: %v", err)
 	}
 	modelsJSON := `{
-  "version": 5,
+  "version": 6,
   "defaultModelKey": "local-one:first",
   "providers": {
     "local-one": {
@@ -233,10 +233,10 @@ func TestNewModelClient_ReusesSharedSingleModelProvider(t *testing.T) {
   "uid": "user-test"
 }`
 	modelsJSON := `{
-  "version": 4,
-  "defaultModelKey": "opagent:gpt-5.4",
+  "version": 6,
+  "defaultModelKey": "openbrain:gpt-5.4",
   "providers": {
-    "opagent": {
+    "openbrain": {
       "models": [
         {
           "id": "gpt-5.4",
@@ -260,11 +260,11 @@ func TestNewModelClient_ReusesSharedSingleModelProvider(t *testing.T) {
 		t.Fatalf("LoadLocalUserProfile(): %v", err)
 	}
 
-	model1, err := NewModelClient(context.Background(), "gpt-5.4", op.Meta{"modelKey": "opagent:gpt-5.4"})
+	model1, err := NewModelClient(context.Background(), "gpt-5.4", op.Meta{"modelKey": "openbrain:gpt-5.4"})
 	if err != nil {
 		t.Fatalf("NewModelClient() first: %v", err)
 	}
-	model2, err := NewModelClient(context.Background(), "gpt-5.4", op.Meta{"modelKey": "opagent:gpt-5.4"})
+	model2, err := NewModelClient(context.Background(), "gpt-5.4", op.Meta{"modelKey": "openbrain:gpt-5.4"})
 	if err != nil {
 		t.Fatalf("NewModelClient() second: %v", err)
 	}
@@ -304,10 +304,10 @@ func TestNewModelClient_PrefersModelKeyOverProviderFacingModelID(t *testing.T) {
   "uid": "user-test"
 }`
 	modelsJSON := `{
-  "version": 4,
-  "defaultModelKey": "opagent:gpt-5.4",
+  "version": 6,
+  "defaultModelKey": "openbrain:gpt-5.4",
   "providers": {
-    "opagent": {
+    "openbrain": {
       "models": [
         {
           "id": "gpt-5.4",
@@ -341,7 +341,7 @@ func TestNewModelClient_PrefersModelKeyOverProviderFacingModelID(t *testing.T) {
 
 	model, err := NewModelClient(context.Background(), "gpt-5.4", op.Meta{
 		"model":    "gpt-5.4",
-		"modelKey": "opagent:gpt-5.4",
+		"modelKey": "openbrain:gpt-5.4",
 	})
 	if err != nil {
 		t.Fatalf("NewModelClient(): %v", err)
@@ -352,8 +352,8 @@ func TestNewModelClient_PrefersModelKeyOverProviderFacingModelID(t *testing.T) {
 	if got := model.config.Provider; got != "opagent-ai-gateway" {
 		t.Fatalf("Provider = %q, want opagent-ai-gateway", got)
 	}
-	if got := model.config.Key; got != "opagent:gpt-5.4" {
-		t.Fatalf("Key = %q, want opagent:gpt-5.4", got)
+	if got := model.config.Key; got != "openbrain:gpt-5.4" {
+		t.Fatalf("Key = %q, want openbrain:gpt-5.4", got)
 	}
 }
 

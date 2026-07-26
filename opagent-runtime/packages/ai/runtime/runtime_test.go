@@ -1111,7 +1111,7 @@ func TestNewSingleModelProvider_UsesGatewayCanonicalProviderForGatewayChatModel(
 	t.Cleanup(resetSingleModelProviderCacheForTest)
 
 	prov, err := NewSingleModelProvider(&op.ModelConfig{
-		Key:      "opagent:kimi-k2.6",
+		Key:      "openbrain:kimi-k2.6",
 		ID:       "kimi-k2.6",
 		Name:     "kimi-k2.6",
 		Provider: "opagent-ai-gateway",
