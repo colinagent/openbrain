@@ -168,6 +168,7 @@ def apply_platform_manifest_fixes(package_dir: Path, platform: str) -> None:
     replacements = {
         "bin/coder": "bin/coder.exe",
         "openbrain-cloud-sync-helper": "openbrain-cloud-sync-helper.exe",
+        "bin/word-document": "bin/word-document.exe",
     }
     for path in package_dir.rglob("*"):
         if not path.is_file() or path.suffix not in (".md", ".yaml", ".yml"):

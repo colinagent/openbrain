@@ -224,6 +224,12 @@ The skill text tells the agent when to run it, how to interpret its structured
 JSON result, and when to notify the user instead of making a destructive git
 decision.
 
+`skills/word-document` uses the same packaging pattern for a dependency-free,
+cross-compiled `bin/word-document[.exe]` helper. It inspects DOCX packages and
+writes true OOXML comments to new files with strict anchors, package validation,
+and audit JSON; it never requires a system Office suite, Python, or a document
+upload service.
+
 Helper output must not include secrets. `selectedSkillContext` also must not
 include secrets; use it for workspace ids, paths, scheduling hints, and other
 non-secret routing context only.

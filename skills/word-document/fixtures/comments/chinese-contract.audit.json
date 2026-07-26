@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "operation": "add-comments",
+  "status": "success",
+  "input_sha256": "8f31becd097bed2991034a8270835594f82f0975c9b1d613a5a80855b807ff42",
+  "output_sha256": "584fe12c23636c7eea6973785a978adc100012780a2c2165a4b640229c2d5024",
+  "output_name": "chinese-contract.commented.docx",
+  "items": [
+    {
+      "finding_id": "DEMO-CN-001",
+      "block_id": "document.p000005",
+      "comment_id": 0,
+      "start": 16,
+      "end": 21,
+      "status": "written"
+    }
+  ]
+}

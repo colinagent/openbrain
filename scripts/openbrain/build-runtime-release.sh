@@ -280,6 +280,7 @@ for platform in "${PLATFORMS[@]}"; do
     "${stage_root}/bin" \
     "${overlay_root}/agents/coder/.agent/bin" \
     "${overlay_root}/skills/openbrain-cloud-sync/bin" \
+    "${overlay_root}/skills/word-document/bin" \
     "${overlay_root}/tools/rg-search/bin" \
     "${stage_root}/configs"
 
@@ -294,6 +295,7 @@ for platform in "${PLATFORMS[@]}"; do
     go build -trimpath -ldflags "-s -w" -o "${stage_root}/bin/opagent-bootstrap${exe_suffix}" ./opagent-runtime/cmd/opagent-bootstrap
     go build -trimpath -ldflags "-s -w" -o "${overlay_root}/agents/coder/.agent/bin/coder${exe_suffix}" ./agents/coder/cmd/coder
     go build -trimpath -ldflags "-s -w" -o "${overlay_root}/skills/openbrain-cloud-sync/bin/openbrain-cloud-sync-helper${exe_suffix}" ./skills/openbrain-cloud-sync/cmd/openbrain-cloud-sync-helper
+    go build -trimpath -ldflags "-s -w" -o "${overlay_root}/skills/word-document/bin/word-document${exe_suffix}" ./skills/word-document/cmd/word-document
   )
   stage_gbrain_binary "${platform}" "${bun_target}" "${stage_root}/bin/${gbrain_binary_name}"
   download_ripgrep "${platform}" "${overlay_root}/tools/rg-search/bin/rg${exe_suffix}"
@@ -314,6 +316,7 @@ for platform in "${PLATFORMS[@]}"; do
       "${stage_root}/agents/coder/.agent/bin/coder${exe_suffix}" \
       "${stage_root}/tools/rg-search/bin/rg${exe_suffix}" \
       "${stage_root}/skills/openbrain-cloud-sync/bin/openbrain-cloud-sync-helper${exe_suffix}" \
+      "${stage_root}/skills/word-document/bin/word-document${exe_suffix}" \
       "${bootstrap_asset_path}" 2>/dev/null || true
   fi
 

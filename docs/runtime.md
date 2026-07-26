@@ -500,6 +500,8 @@ agents/simple-memory/.agent/AGENT.md
 agents/gbrain/...
 skills/openbrain-cloud-sync/SKILL.md
 skills/openbrain-cloud-sync/bin/openbrain-cloud-sync-helper[.exe]
+skills/word-document/SKILL.md
+skills/word-document/bin/word-document[.exe]
 tools/gbrain-cloud/TOOL.md
 tools/rg-search/TOOL.md
 tools/rg-search/bin/rg[.exe]
@@ -536,6 +538,10 @@ appended; OpenBrain processes can still prefer `<baseDir>/bin` internally.
   this skill for the turn. The skill includes a platform-specific helper binary
   for OpenBrain API auth, short-lived workspace git token exchange, temporary
   `GIT_ASKPASS`, standard safe git sync steps, and Cloud Brain sync triggering.
+- `skills/word-document`: model-independent DOCX inspection and safe OOXML
+  mutation workflow. Its cross-platform helper creates new review artifacts,
+  validates package invariants, and emits machine-readable audits without
+  requiring Office, Python, or a remote document service.
 
 The old `agents/opagent` package and nested memory subagent are retired.
 
@@ -549,6 +555,7 @@ directories, not from the repository root:
 (cd server && go test ./...)
 (cd agents/coder && go test ./...)
 (cd skills/openbrain-cloud-sync && go test ./...)
+(cd skills/word-document && go test ./...)
 (cd opagent-protocol/go-sdk && go test ./...)
 ```
 

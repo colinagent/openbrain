@@ -7,6 +7,7 @@ use (
 	./opagent-protocol/go-sdk
 	./opagent-runtime
 	./skills/openbrain-cloud-sync
+	./skills/word-document
 )
 
 replace github.com/colinagent/openbrain/opagent-protocol/go-sdk v0.1.0 => ./opagent-protocol/go-sdk

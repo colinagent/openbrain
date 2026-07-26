@@ -147,6 +147,7 @@ for platform in "${PLATFORMS[@]}"; do
   mkdir -p \
     "${overlay_root}/agents/coder/.agent/bin" \
     "${overlay_root}/skills/openbrain-cloud-sync/bin" \
+    "${overlay_root}/skills/word-document/bin" \
     "${overlay_root}/tools/rg-search/bin"
 
   echo "[openbrain-marketplace] platform=${platform}"
@@ -158,6 +159,7 @@ for platform in "${PLATFORMS[@]}"; do
     export GOWORK="${REPO_ROOT}/go.work"
     go build -trimpath -ldflags "-s -w" -o "${overlay_root}/agents/coder/.agent/bin/coder${exe_suffix}" ./agents/coder/cmd/coder
     go build -trimpath -ldflags "-s -w" -o "${overlay_root}/skills/openbrain-cloud-sync/bin/openbrain-cloud-sync-helper${exe_suffix}" ./skills/openbrain-cloud-sync/cmd/openbrain-cloud-sync-helper
+    go build -trimpath -ldflags "-s -w" -o "${overlay_root}/skills/word-document/bin/word-document${exe_suffix}" ./skills/word-document/cmd/word-document
   )
   download_ripgrep "${platform}" "${overlay_root}/tools/rg-search/bin/rg${exe_suffix}"
 done
