@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "input_sha256": "5f919a7480b118c4f81fe227e58ebf7ce224a2c015dd9cd23668ff6a14ac76ce",
+  "changes": [
+    {
+      "finding_id": "REDLINE-HEADER-001",
+      "block_id": "document.p000002",
+      "exact_quote": "只读预览",
+      "replacement": "文档审查",
+      "start": 18,
+      "end": 22,
+      "context_hash": "c466403f0c23d28c233e75d8319e29917318a8cddb5b74cee81b83fb31c0045b",
+      "author": "OpenBrain",
+      "created_at": "2026-07-26T09:00:00Z"
+    }
+  ]
+}

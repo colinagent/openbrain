@@ -22,6 +22,7 @@ type parsedRun struct {
 	textNodes   []textNode
 	text        string
 	unsupported bool
+	inRevision  bool
 }
 
 type parsedBlock struct {
@@ -41,7 +42,7 @@ func parseDocument(document []byte) ([]parsedBlock, error) {
 	var run *parsedRun
 	var text *textNode
 	var inBody, inCell int
-	var deletedDepth, runPropertiesDepth int
+	var deletedDepth, revisionDepth, runPropertiesDepth int
 	paragraphIndex := 0
 
 	for {
@@ -64,6 +65,9 @@ func parseDocument(document []byte) ([]parsedBlock, error) {
 					inCell++
 				case "del":
 					deletedDepth++
+					revisionDepth++
+				case "ins", "moveTo", "moveFrom":
+					revisionDepth++
 				case "altChunk":
 					return nil, fmt.Errorf("word/document.xml contains unsupported altChunk content")
 				case "p":
@@ -83,6 +87,7 @@ func parseDocument(document []byte) ([]parsedBlock, error) {
 					if block != nil && run == nil && deletedDepth == 0 {
 						run = &parsedRun{}
 						run.span.rawStart = before
+						run.inRevision = revisionDepth > 0
 					}
 				case "rPr":
 					if run != nil {
@@ -154,6 +159,13 @@ func parseDocument(document []byte) ([]parsedBlock, error) {
 			case "del":
 				if deletedDepth > 0 {
 					deletedDepth--
+				}
+				if revisionDepth > 0 {
+					revisionDepth--
+				}
+			case "ins", "moveTo", "moveFrom":
+				if revisionDepth > 0 {
+					revisionDepth--
 				}
 			case "tc":
 				if inCell > 0 {

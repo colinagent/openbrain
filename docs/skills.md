@@ -226,9 +226,9 @@ decision.
 
 `skills/word-document` uses the same packaging pattern for a dependency-free,
 cross-compiled `bin/word-document[.exe]` helper. It inspects DOCX packages and
-writes true OOXML comments to new files with strict anchors, package validation,
-and audit JSON; it never requires a system Office suite, Python, or a document
-upload service.
+writes true OOXML comments and tracked changes to new files with strict anchors,
+package validation, clean-copy accept/reject modes, and audit JSON; it never
+requires a system Office suite, Python, or a document upload service.
 
 Helper output must not include secrets. `selectedSkillContext` also must not
 include secrets; use it for workspace ids, paths, scheduling hints, and other

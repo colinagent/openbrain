@@ -539,7 +539,8 @@ appended; OpenBrain processes can still prefer `<baseDir>/bin` internally.
   for OpenBrain API auth, short-lived workspace git token exchange, temporary
   `GIT_ASKPASS`, standard safe git sync steps, and Cloud Brain sync triggering.
 - `skills/word-document`: model-independent DOCX inspection and safe OOXML
-  mutation workflow. Its cross-platform helper creates new review artifacts,
+  mutation workflow. Its cross-platform helper creates true comment and tracked
+  change artifacts, accepts or rejects supported revisions into clean copies,
   validates package invariants, and emits machine-readable audits without
   requiring Office, Python, or a remote document service.
 

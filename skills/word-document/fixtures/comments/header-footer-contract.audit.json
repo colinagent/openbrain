@@ -2,6 +2,8 @@
   "version": 1,
   "operation": "add-comments",
   "status": "success",
+  "operation_count": 1,
+  "failure_count": 0,
   "input_sha256": "5f919a7480b118c4f81fe227e58ebf7ce224a2c015dd9cd23668ff6a14ac76ce",
   "output_sha256": "752ed0a6c30a089d68bf0108f47edc89bc45d9495dff11efb621dea163a00141",
   "output_name": "header-footer-contract.commented.docx",

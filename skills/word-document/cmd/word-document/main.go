@@ -113,6 +113,76 @@ func addCommentsCommand(args []string) {
 	writeJSON("-", map[string]any{"ok": true, "output_name": filepath.Base(*output), "audit_name": filepath.Base(*auditPath), "output_sha256": audit.OutputSHA256})
 }
 
+func addRedlinesCommand(args []string) {
+	flags := flag.NewFlagSet("add-redlines", flag.ContinueOnError)
+	input := flags.String("input", "", "input DOCX")
+	planPath := flags.String("plan", "", "redline plan JSON")
+	output := flags.String("output", "", "new redline DOCX path")
+	auditPath := flags.String("audit", "", "audit JSON path")
+	if err := flags.Parse(args); err != nil {
+		fail("invalid_arguments", err)
+	}
+	if *output == "" || *auditPath == "" {
+		fail("invalid_arguments", fmt.Errorf("--output and --audit are required"))
+	}
+	inputAbs, err := filepath.Abs(*input)
+	if err != nil {
+		fail("invalid_arguments", err)
+	}
+	outputAbs, err := filepath.Abs(*output)
+	if err != nil {
+		fail("invalid_arguments", err)
+	}
+	if inputAbs == outputAbs {
+		fail("in_place_forbidden", fmt.Errorf("refusing to overwrite the input DOCX"))
+	}
+	var plan docx.RedlinePlan
+	if err := json.Unmarshal(readRequired(*planPath, "plan"), &plan); err != nil {
+		fail("invalid_plan", err)
+	}
+	result, audit, err := docx.AddRedlines(readRequired(*input, "input"), plan, *output)
+	if err != nil {
+		fail("add_redlines_failed", err)
+	}
+	if err := docx.WriteOutputAndAudit(*output, *auditPath, result, audit); err != nil {
+		fail("write_failed", err)
+	}
+	writeJSON("-", map[string]any{"ok": true, "output_name": filepath.Base(*output), "audit_name": filepath.Base(*auditPath), "output_sha256": audit.OutputSHA256})
+}
+
+func applyRevisionsCommand(args []string) {
+	flags := flag.NewFlagSet("apply-revisions", flag.ContinueOnError)
+	input := flags.String("input", "", "input DOCX with tracked revisions")
+	mode := flags.String("mode", "", "accept or reject")
+	output := flags.String("output", "", "new clean DOCX path")
+	auditPath := flags.String("audit", "", "audit JSON path")
+	if err := flags.Parse(args); err != nil {
+		fail("invalid_arguments", err)
+	}
+	if *output == "" || *auditPath == "" {
+		fail("invalid_arguments", fmt.Errorf("--output and --audit are required"))
+	}
+	inputAbs, err := filepath.Abs(*input)
+	if err != nil {
+		fail("invalid_arguments", err)
+	}
+	outputAbs, err := filepath.Abs(*output)
+	if err != nil {
+		fail("invalid_arguments", err)
+	}
+	if inputAbs == outputAbs {
+		fail("in_place_forbidden", fmt.Errorf("refusing to overwrite the input DOCX"))
+	}
+	result, audit, err := docx.ApplyRevisions(readRequired(*input, "input"), strings.ToLower(strings.TrimSpace(*mode)), *output)
+	if err != nil {
+		fail("apply_revisions_failed", err)
+	}
+	if err := docx.WriteOutputAndAudit(*output, *auditPath, result, audit); err != nil {
+		fail("write_failed", err)
+	}
+	writeJSON("-", map[string]any{"ok": true, "mode": *mode, "output_name": filepath.Base(*output), "audit_name": filepath.Base(*auditPath), "output_sha256": audit.OutputSHA256})
+}
+
 func validateCommand(args []string) {
 	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
 	input := flags.String("input", "", "input DOCX")
@@ -128,7 +198,7 @@ func validateCommand(args []string) {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: word-document <inspect|add-comments|validate> [flags]")
+	fmt.Fprintln(os.Stderr, "usage: word-document <inspect|add-comments|add-redlines|apply-revisions|validate> [flags]")
 }
 
 func main() {
@@ -141,6 +211,10 @@ func main() {
 		inspectCommand(os.Args[2:])
 	case "add-comments":
 		addCommentsCommand(os.Args[2:])
+	case "add-redlines":
+		addRedlinesCommand(os.Args[2:])
+	case "apply-revisions":
+		applyRevisionsCommand(os.Args[2:])
 	case "validate":
 		validateCommand(os.Args[2:])
 	case "help", "-h", "--help":

@@ -1,4 +1,4 @@
 interface:
   display_name: "Word Document"
   short_description: "Inspect and safely edit DOCX comments and tracked changes"
-  default_prompt: "Use $word-document to inspect this DOCX and add review comments without changing the original file."
+  default_prompt: "Use $word-document to inspect this DOCX and create a validated redline and clean copy without changing the original."

@@ -96,6 +96,30 @@ func planFor(t *testing.T, input []byte, blockID, quote string) CommentPlan {
 	}}}
 }
 
+func redlinePlanFor(t *testing.T, input []byte, blockID, quote, replacement string) RedlinePlan {
+	t.Helper()
+	inspection, err := InspectBytes(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var block Block
+	for _, candidate := range inspection.Blocks {
+		if candidate.ID == blockID {
+			block = candidate
+		}
+	}
+	byteStart := strings.Index(block.Text, quote)
+	if byteStart < 0 {
+		t.Fatalf("quote %q not found in %q", quote, block.Text)
+	}
+	start := len([]rune(block.Text[:byteStart]))
+	return RedlinePlan{Version: SchemaVersion, InputSHA256: inspection.InputSHA256, Changes: []RedlineRequest{{
+		FindingID: "R-001", BlockID: block.ID, ExactQuote: quote, Replacement: replacement,
+		Start: start, End: start + len([]rune(quote)), ContextHash: block.ContextHash,
+		Author: "OpenBrain", CreatedAt: time.Date(2026, 7, 26, 9, 0, 0, 0, time.UTC),
+	}}}
+}
+
 func TestInspectMapsParagraphsRunsAndTableCells(t *testing.T) {
 	inspection, err := InspectBytes(makeTestDOCX(t, false))
 	if err != nil {
@@ -136,7 +160,7 @@ func TestAddCommentsUsesTrueOOXMLAndPreservesExistingComments(t *testing.T) {
 	if SHA256(input) != inputHash {
 		t.Fatal("input changed")
 	}
-	if audit.InputSHA256 != inputHash || audit.OutputSHA256 != SHA256(output) || len(audit.Items) != 1 {
+	if audit.InputSHA256 != inputHash || audit.OutputSHA256 != SHA256(output) || audit.OperationCount != 1 || audit.FailureCount != 0 || len(audit.Items) != 1 {
 		t.Fatalf("audit=%+v", audit)
 	}
 	validation := ValidateBytes(output)
@@ -200,6 +224,168 @@ func TestAddCommentsIsByteDeterministicForAFixedPlan(t *testing.T) {
 	secondJSON, _ := json.Marshal(secondAudit)
 	if !bytes.Equal(firstJSON, secondJSON) {
 		t.Fatal("fixed plan produced different audits")
+	}
+}
+
+func TestValidateRequiresTrackedRevisionPackageMetadata(t *testing.T) {
+	input := makeTestDOCX(t, false)
+	plan := redlinePlanFor(t, input, "document.p000001", "合同", "协议")
+	redline, _, err := AddRedlines(input, plan, "review.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := OpenBytes(redline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings, _ := pkg.Read("word/settings.xml")
+	rels, _ := pkg.Read("word/_rels/document.xml.rels")
+	contentTypes, _ := pkg.Read("[Content_Types].xml")
+	cases := map[string]map[string][]byte{
+		"tracking setting": {
+			"word/settings.xml": bytes.Replace(settings, []byte(`<w:trackRevisions/>`), nil, 1),
+		},
+		"settings relationship": {
+			"word/_rels/document.xml.rels": bytes.Replace(rels, []byte(settingsRelationshipType), []byte("urn:invalid-settings-relationship"), 1),
+		},
+		"settings content type": {
+			"[Content_Types].xml": bytes.Replace(contentTypes, []byte(settingsContentType), []byte("application/invalid"), 1),
+		},
+	}
+	for name, changes := range cases {
+		t.Run(name, func(t *testing.T) {
+			malformed, writeErr := pkg.Write(changes)
+			if writeErr != nil {
+				t.Fatal(writeErr)
+			}
+			if validation := ValidateBytes(malformed); validation.Valid {
+				t.Fatalf("malformed revision package passed validation: %+v", validation)
+			}
+		})
+	}
+}
+
+func TestAddRedlinesCreatesTrueRevisionsAndAcceptRejectCopies(t *testing.T) {
+	input := makeTestDOCX(t, true)
+	plan := redlinePlanFor(t, input, "document.p000001", "合同 应当", "合同须在约定期限内")
+	redline, audit, err := AddRedlines(input, plan, "review.redline.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if audit.OperationCount != 1 || audit.FailureCount != 0 || audit.Items[0].DeletionID == nil || *audit.Items[0].DeletionID != 0 || audit.Items[0].InsertionID == nil || *audit.Items[0].InsertionID != 1 {
+		t.Fatalf("audit=%+v", audit)
+	}
+	validation := ValidateBytes(redline)
+	if !validation.Valid || validation.RevisionCount != 2 || validation.CommentCount != 1 {
+		t.Fatalf("validation=%+v", validation)
+	}
+	pkg, _ := OpenBytes(redline)
+	document, _ := pkg.Read("word/document.xml")
+	settings, _ := pkg.Read("word/settings.xml")
+	for _, expected := range []string{"w:del", "w:ins", "w:delText", "合同须在约定期限内", "<w:b/>"} {
+		if !bytes.Contains(document, []byte(expected)) {
+			t.Fatalf("redline missing %s", expected)
+		}
+	}
+	if !bytes.Contains(settings, []byte("trackRevisions")) {
+		t.Fatal("tracking setting is missing")
+	}
+
+	accepted, acceptedAudit, err := ApplyRevisions(redline, "accept", "accepted.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acceptedAudit.Operation != "accept-revisions" || acceptedAudit.OperationCount != 2 || acceptedAudit.FailureCount != 0 || ValidateBytes(accepted).RevisionCount != 0 {
+		t.Fatalf("accepted audit=%+v validation=%+v", acceptedAudit, ValidateBytes(accepted))
+	}
+	acceptedInspection, _ := InspectBytes(accepted)
+	if acceptedInspection.Blocks[0].Text != "第一条 合同须在约定期限内公平。" {
+		t.Fatalf("accepted text=%q", acceptedInspection.Blocks[0].Text)
+	}
+	if acceptedInspection.ExistingComments != 1 {
+		t.Fatal("accept removed existing comments")
+	}
+	acceptedPackage, _ := OpenBytes(accepted)
+	acceptedSettings, _ := acceptedPackage.Read("word/settings.xml")
+	if bytes.Contains(acceptedSettings, []byte("trackRevisions")) {
+		t.Fatal("accept left trackRevisions enabled")
+	}
+
+	rejected, rejectedAudit, err := ApplyRevisions(redline, "reject", "rejected.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rejectedAudit.Operation != "reject-revisions" || ValidateBytes(rejected).RevisionCount != 0 {
+		t.Fatalf("rejected audit=%+v validation=%+v", rejectedAudit, ValidateBytes(rejected))
+	}
+	rejectedInspection, _ := InspectBytes(rejected)
+	if rejectedInspection.Blocks[0].Text != "第一条 合同 应当公平。" {
+		t.Fatalf("rejected text=%q", rejectedInspection.Blocks[0].Text)
+	}
+	if rejectedInspection.ExistingComments != 1 {
+		t.Fatal("reject removed existing comments")
+	}
+}
+
+func TestDeletionOnlyRedlineAndNonOverlappingBatch(t *testing.T) {
+	input := makeTestDOCX(t, false)
+	plan := redlinePlanFor(t, input, "document.p000001", "合同", "")
+	second := redlinePlanFor(t, input, "document.p000002", "责任", "赔偿责任").Changes[0]
+	second.FindingID = "R-002"
+	plan.Changes = append(plan.Changes, second)
+	redline, audit, err := AddRedlines(input, plan, "batch.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(audit.Items) != 2 || audit.Items[0].InsertionID != nil || audit.Items[1].InsertionID == nil {
+		t.Fatalf("audit=%+v", audit)
+	}
+	if validation := ValidateBytes(redline); !validation.Valid || validation.RevisionCount != 3 {
+		t.Fatalf("validation=%+v", validation)
+	}
+	accepted, _, err := ApplyRevisions(redline, "accept", "accepted.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspection, _ := InspectBytes(accepted)
+	if strings.Contains(inspection.Blocks[0].Text, "合同") || !strings.Contains(inspection.Blocks[1].Text, "赔偿责任") {
+		t.Fatalf("accepted blocks=%+v", inspection.Blocks)
+	}
+}
+
+func TestRedlineIDsDoNotCollideAndExistingRevisionRunsFailClosed(t *testing.T) {
+	input := makeTestDOCX(t, false)
+	firstPlan := redlinePlanFor(t, input, "document.p000001", "合同", "协议")
+	first, _, err := AddRedlines(input, firstPlan, "first.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondPlan := redlinePlanFor(t, first, "document.p000002", "责任", "赔偿责任")
+	second, audit, err := AddRedlines(first, secondPlan, "second.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *audit.Items[0].DeletionID != 2 || *audit.Items[0].InsertionID != 3 {
+		t.Fatalf("audit=%+v", audit)
+	}
+	if validation := ValidateBytes(second); !validation.Valid || validation.RevisionCount != 4 {
+		t.Fatalf("validation=%+v", validation)
+	}
+
+	unsafePlan := redlinePlanFor(t, first, "document.p000001", "协议", "文件")
+	if output, _, err := AddRedlines(first, unsafePlan, "unsafe.docx"); err == nil || output != nil {
+		t.Fatal("redlining an existing revision must fail closed")
+	}
+}
+
+func TestApplyRevisionsRejectsUnsupportedPropertyChanges(t *testing.T) {
+	input := makeTestDOCX(t, false)
+	pkg, _ := OpenBytes(input)
+	document, _ := pkg.Read("word/document.xml")
+	document = bytes.Replace(document, []byte(`<w:rPr><w:b/></w:rPr>`), []byte(`<w:rPr><w:b/><w:rPrChange w:id="9"><w:rPr/></w:rPrChange></w:rPr>`), 1)
+	input, _ = pkg.Write(map[string][]byte{"word/document.xml": document})
+	if output, _, err := ApplyRevisions(input, "accept", "accepted.docx"); err == nil || output != nil {
+		t.Fatal("unsupported property change must fail closed")
 	}
 }
 

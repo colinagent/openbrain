@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "operation": "accept-revisions",
+  "status": "success",
+  "operation_count": 2,
+  "failure_count": 0,
+  "input_sha256": "d12005ba85d9fb461873f6be2690ba3e9074d31dc8e1b9d000170459ecc571e2",
+  "output_sha256": "6d2e5ddc7e55728de15a30bad659738311898263f0dab9fd8405e4bfa6105b1c",
+  "output_name": "chinese-contract.accepted.docx",
+  "items": [
+    {
+      "revision_id": 0,
+      "revision_type": "del",
+      "action": "removed",
+      "status": "applied"
+    },
+    {
+      "revision_id": 1,
+      "revision_type": "ins",
+      "action": "kept-content",
+      "status": "applied"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "operation": "reject-revisions",
+  "status": "success",
+  "operation_count": 2,
+  "failure_count": 0,
+  "input_sha256": "d12005ba85d9fb461873f6be2690ba3e9074d31dc8e1b9d000170459ecc571e2",
+  "output_sha256": "1955fcfde93d6a551acde69ed9b817a2aa591632466172780b7e1ccbbabbb433",
+  "output_name": "chinese-contract.rejected.docx",
+  "items": [
+    {
+      "revision_id": 0,
+      "revision_type": "del",
+      "action": "kept-content",
+      "status": "applied"
+    },
+    {
+      "revision_id": 1,
+      "revision_type": "ins",
+      "action": "removed",
+      "status": "applied"
+    }
+  ]
+}

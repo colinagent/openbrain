@@ -54,30 +54,58 @@ type CommentRequest struct {
 	CreatedAt   time.Time `json:"created_at,omitempty"`
 }
 
+type RedlinePlan struct {
+	Version     int              `json:"version"`
+	InputSHA256 string           `json:"input_sha256"`
+	Changes     []RedlineRequest `json:"changes"`
+}
+
+type RedlineRequest struct {
+	FindingID   string    `json:"finding_id"`
+	BlockID     string    `json:"block_id"`
+	ExactQuote  string    `json:"exact_quote"`
+	Replacement string    `json:"replacement"`
+	Start       int       `json:"start"`
+	End         int       `json:"end"`
+	ContextHash string    `json:"context_hash"`
+	Author      string    `json:"author,omitempty"`
+	CreatedAt   time.Time `json:"created_at,omitempty"`
+}
+
 type AuditItem struct {
-	FindingID string `json:"finding_id"`
-	BlockID   string `json:"block_id"`
-	CommentID int    `json:"comment_id"`
-	Start     int    `json:"start"`
-	End       int    `json:"end"`
-	Status    string `json:"status"`
+	FindingID    string `json:"finding_id,omitempty"`
+	BlockID      string `json:"block_id,omitempty"`
+	CommentID    *int   `json:"comment_id,omitempty"`
+	DeletionID   *int   `json:"deletion_id,omitempty"`
+	InsertionID  *int   `json:"insertion_id,omitempty"`
+	RevisionID   *int   `json:"revision_id,omitempty"`
+	RevisionType string `json:"revision_type,omitempty"`
+	Action       string `json:"action,omitempty"`
+	Start        *int   `json:"start,omitempty"`
+	End          *int   `json:"end,omitempty"`
+	Status       string `json:"status"`
 }
 
 type Audit struct {
-	Version      int         `json:"version"`
-	Operation    string      `json:"operation"`
-	Status       string      `json:"status"`
-	InputSHA256  string      `json:"input_sha256"`
-	OutputSHA256 string      `json:"output_sha256"`
-	OutputName   string      `json:"output_name"`
-	Items        []AuditItem `json:"items"`
+	Version        int         `json:"version"`
+	Operation      string      `json:"operation"`
+	Status         string      `json:"status"`
+	OperationCount int         `json:"operation_count"`
+	FailureCount   int         `json:"failure_count"`
+	InputSHA256    string      `json:"input_sha256"`
+	OutputSHA256   string      `json:"output_sha256"`
+	OutputName     string      `json:"output_name"`
+	Items          []AuditItem `json:"items"`
 }
 
 type Validation struct {
-	Version      int      `json:"version"`
-	Valid        bool     `json:"valid"`
-	Errors       []string `json:"errors"`
-	Warnings     []string `json:"warnings"`
-	CommentCount int      `json:"comment_count"`
-	InputSHA256  string   `json:"input_sha256"`
+	Version       int      `json:"version"`
+	Valid         bool     `json:"valid"`
+	Errors        []string `json:"errors"`
+	Warnings      []string `json:"warnings"`
+	CommentCount  int      `json:"comment_count"`
+	RevisionCount int      `json:"revision_count"`
+	InputSHA256   string   `json:"input_sha256"`
 }
+
+func intPointer(value int) *int { return &value }

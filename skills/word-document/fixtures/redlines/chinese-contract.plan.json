@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "input_sha256": "8f31becd097bed2991034a8270835594f82f0975c9b1d613a5a80855b807ff42",
+  "changes": [
+    {
+      "finding_id": "REDLINE-CN-001",
+      "block_id": "document.p000005",
+      "exact_quote": "五个工作日",
+      "replacement": "三个工作日",
+      "start": 16,
+      "end": 21,
+      "context_hash": "05ad0758dca3f79de286bc2a1707ee5a6189f4ff0c24c18e59c017802f05a6eb",
+      "author": "OpenBrain",
+      "created_at": "2026-07-26T09:00:00Z"
+    }
+  ]
+}

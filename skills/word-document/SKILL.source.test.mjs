@@ -5,18 +5,31 @@ import test from 'node:test';
 const skill = readFileSync(new URL('./SKILL.md', import.meta.url), 'utf8');
 const architecture = readFileSync(new URL('./references/helper-architecture.md', import.meta.url), 'utf8');
 const comments = readFileSync(new URL('./references/ooxml-comments.md', import.meta.url), 'utf8');
+const trackedChanges = readFileSync(new URL('./references/ooxml-tracked-changes.md', import.meta.url), 'utf8');
 const runtimeBuild = readFileSync(new URL('../../scripts/openbrain/build-runtime-release.sh', import.meta.url), 'utf8');
 const marketplaceBuild = readFileSync(new URL('../../scripts/openbrain/build-marketplace-release.sh', import.meta.url), 'utf8');
 
 test('Word skill requires deterministic inspect, write, validate flow', () => {
   assert.match(skill, /inspect --input/);
   assert.match(skill, /add-comments/);
+  assert.match(skill, /add-redlines/);
+  assert.match(skill, /apply-revisions/);
   assert.match(skill, /validate --input/);
   assert.match(skill, /input_sha256/);
   assert.match(skill, /context_hash/);
   assert.match(skill, /exact_quote/);
   assert.match(skill, /never overwrite an existing/i);
   assert.match(skill, /Do not retry by searching for a similar sentence/);
+});
+
+test('Word skill exposes true redline and clean-copy modes', () => {
+  assert.match(skill, /`comments-only`/);
+  assert.match(skill, /`redline`/);
+  assert.match(skill, /`clean-copy`/);
+  assert.match(trackedChanges, /w:delText/);
+  assert.match(trackedChanges, /w:ins/);
+  assert.match(trackedChanges, /revision_count: 0/);
+  assert.match(trackedChanges, /Fail closed/);
 });
 
 test('Word helper is a bundled dependency-free executable', () => {

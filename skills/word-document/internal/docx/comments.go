@@ -66,11 +66,39 @@ func addSpacePreserve(rawPrefix []byte, text string) []byte {
 	return output
 }
 
-func cloneRunRange(document []byte, run parsedRun, start, end int) ([]byte, error) {
-	text, ok := runeSlice(run.text, start, end)
-	if !ok {
-		return nil, fmt.Errorf("run slice %d:%d is outside its text", start, end)
+func renameTextElement(raw []byte, local string, closing bool) ([]byte, error) {
+	needle := []byte("<")
+	if closing {
+		needle = []byte("</")
 	}
+	index := bytes.LastIndex(raw, needle)
+	if closing {
+		index = bytes.Index(raw, needle)
+	}
+	if index < 0 {
+		return nil, fmt.Errorf("run text element boundary is missing")
+	}
+	nameStart := index + len(needle)
+	nameEnd := nameStart
+	for nameEnd < len(raw) && !strings.ContainsRune(" \t\r\n>/", rune(raw[nameEnd])) {
+		nameEnd++
+	}
+	if nameEnd == nameStart {
+		return nil, fmt.Errorf("run text element name is missing")
+	}
+	name := string(raw[nameStart:nameEnd])
+	prefix := ""
+	if colon := strings.IndexByte(name, ':'); colon >= 0 {
+		prefix = name[:colon+1]
+	}
+	result := make([]byte, 0, len(raw)+len(local))
+	result = append(result, raw[:nameStart]...)
+	result = append(result, prefix+local...)
+	result = append(result, raw[nameEnd:]...)
+	return result, nil
+}
+
+func cloneRunText(document []byte, run parsedRun, text, elementLocal string) ([]byte, error) {
 	if text == "" {
 		return nil, nil
 	}
@@ -78,11 +106,31 @@ func cloneRunRange(document []byte, run parsedRun, start, end int) ([]byte, erro
 		return nil, fmt.Errorf("run %s contains unsupported non-text content", run.span.ID)
 	}
 	prefix := addSpacePreserve(document[run.span.rawStart:run.span.textStart], text)
+	suffix := document[run.span.textEnd:run.span.rawEnd]
+	if elementLocal != "t" {
+		var err error
+		prefix, err = renameTextElement(prefix, elementLocal, false)
+		if err != nil {
+			return nil, err
+		}
+		suffix, err = renameTextElement(suffix, elementLocal, true)
+		if err != nil {
+			return nil, err
+		}
+	}
 	result := make([]byte, 0, len(prefix)+len(text)+run.span.rawEnd-run.span.textEnd)
 	result = append(result, prefix...)
 	result = append(result, escapeText(text)...)
-	result = append(result, document[run.span.textEnd:run.span.rawEnd]...)
+	result = append(result, suffix...)
 	return result, nil
+}
+
+func cloneRunRange(document []byte, run parsedRun, start, end int) ([]byte, error) {
+	text, ok := runeSlice(run.text, start, end)
+	if !ok {
+		return nil, fmt.Errorf("run slice %d:%d is outside its text", start, end)
+	}
+	return cloneRunText(document, run, text, "t")
 }
 
 func locateRun(runs []parsedRun, offset int, endBoundary bool) (int, error) {
@@ -420,12 +468,13 @@ func AddComments(input []byte, plan CommentPlan, outputName string) ([]byte, Aud
 	}
 	audit := Audit{
 		Version: SchemaVersion, Operation: "add-comments", Status: "success",
+		OperationCount: len(prepared), FailureCount: 0,
 		InputSHA256: inputHash, OutputSHA256: SHA256(output), OutputName: filepath.Base(outputName),
 	}
 	for _, item := range prepared {
 		audit.Items = append(audit.Items, AuditItem{
-			FindingID: item.request.FindingID, BlockID: item.request.BlockID, CommentID: item.id,
-			Start: item.request.Start, End: item.request.End, Status: "written",
+			FindingID: item.request.FindingID, BlockID: item.request.BlockID, CommentID: intPointer(item.id),
+			Start: intPointer(item.request.Start), End: intPointer(item.request.End), Status: "written",
 		})
 	}
 	return output, audit, nil
