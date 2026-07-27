@@ -53,6 +53,10 @@ type Connection struct {
 	Ctx         context.Context         `json:"-"`
 	Cancel      context.CancelFunc      `json:"-"`
 	runtime     *connectionRuntimeState `json:"-"`
+	// Recovery may retire a cached daemon while parallel tool calls still hold
+	// this Connection. Calls snapshot the pointer under this lock; the protocol
+	// session owns synchronization for operations already in flight.
+	sessionMu sync.RWMutex `json:"-"`
 }
 
 func CreateConnection(ctx context.Context, node *op.OpNode) (*Connection, error) {
@@ -119,7 +123,7 @@ func createConnection(ctx context.Context, node *op.OpNode, opts createConnectio
 			cancel()
 			return nil, fmt.Errorf("connect (stdio) failed: %v", err)
 		}
-		conn.Session = session
+		conn.setSession(session)
 		conn.setConnectedAt(startedAt)
 		if pid > 0 {
 			conn.setProcessRuntime(pid, startedAt)
@@ -134,11 +138,13 @@ func createConnection(ctx context.Context, node *op.OpNode, opts createConnectio
 			cancel()
 			return nil, fmt.Errorf("connect (httpstream) failed: %v", err)
 		}
-		conn.Session = session
+		conn.setSession(session)
 		conn.setConnectedAt(time.Now().UTC())
 	}
 
-	conn.Session.SetLoggingLevel(connCtx, &op.SetLoggingLevelParams{Level: "info"})
+	if session := conn.currentSession(); session != nil {
+		session.SetLoggingLevel(connCtx, &op.SetLoggingLevelParams{Level: "info"})
+	}
 
 	go func() {
 		<-connCtx.Done()
@@ -207,7 +213,7 @@ func recoverConnection(ctx context.Context, node *op.OpNode, failed *Connection)
 	defer lock.Unlock()
 
 	current := GetConn(node.ID)
-	if current != nil && current.Session != nil && current != failed {
+	if current != nil && current.hasSession() && current != failed {
 		return current, nil
 	}
 	if current != nil {
@@ -353,11 +359,14 @@ func httpConn(ctx context.Context, node *op.OpNode, client *op.Client, httpClien
 }
 
 func (conn *Connection) Close() {
+	if conn == nil {
+		return
+	}
 	if conn.Daemon {
 		return
 	}
-	if conn.Session != nil {
-		conn.Session.Close()
+	if session := conn.currentSession(); session != nil {
+		_ = session.Close()
 	}
 
 	cache.Delete(conn.NodeID, cache.PrefixConnection)
@@ -370,11 +379,44 @@ func (conn *Connection) ForceClose() {
 	if conn.Cancel != nil {
 		conn.Cancel()
 	}
-	if conn.Session != nil {
-		_ = conn.Session.Close()
-		conn.Session = nil
+	if session := conn.takeSession(); session != nil {
+		_ = session.Close()
 	}
 	cache.Delete(conn.NodeID, cache.PrefixConnection)
+}
+
+func (conn *Connection) setSession(session *op.ClientSession) {
+	if conn == nil {
+		return
+	}
+	conn.sessionMu.Lock()
+	conn.Session = session
+	conn.sessionMu.Unlock()
+}
+
+func (conn *Connection) currentSession() *op.ClientSession {
+	if conn == nil {
+		return nil
+	}
+	conn.sessionMu.RLock()
+	session := conn.Session
+	conn.sessionMu.RUnlock()
+	return session
+}
+
+func (conn *Connection) hasSession() bool {
+	return conn.currentSession() != nil
+}
+
+func (conn *Connection) takeSession() *op.ClientSession {
+	if conn == nil {
+		return nil
+	}
+	conn.sessionMu.Lock()
+	session := conn.Session
+	conn.Session = nil
+	conn.sessionMu.Unlock()
+	return session
 }
 
 // CloseDaemonConnections force closes all cached daemon connections.
@@ -395,7 +437,8 @@ func CloseDaemonConnections() int {
 }
 
 func (conn *Connection) CallNode(ctx context.Context, meta op.Meta, content op.Content) (*op.CallNodeResult, error) {
-	if conn.Session == nil {
+	session := conn.currentSession()
+	if session == nil {
 		return nil, fmt.Errorf("connection session is nil")
 	}
 	if conn.NodeID == "" {
@@ -405,7 +448,7 @@ func (conn *Connection) CallNode(ctx context.Context, meta op.Meta, content op.C
 		Meta:    meta,
 		Content: content,
 	}
-	result, err := conn.Session.CallNode(ctx, callNodeParams)
+	result, err := session.CallNode(ctx, callNodeParams)
 	if err != nil {
 		return nil, err
 	}
@@ -414,13 +457,14 @@ func (conn *Connection) CallNode(ctx context.Context, meta op.Meta, content op.C
 }
 
 func (conn *Connection) CallAgent(ctx context.Context, agentID string, meta op.Meta, content op.Content) (*op.CallAgentResult, error) {
-	if conn == nil || conn.Session == nil {
+	session := conn.currentSession()
+	if session == nil {
 		return nil, fmt.Errorf("connection session is nil")
 	}
 	if strings.TrimSpace(agentID) == "" {
 		return nil, fmt.Errorf("agentID is required")
 	}
-	result, err := conn.Session.CallAgent(ctx, &op.CallAgentParams{
+	result, err := session.CallAgent(ctx, &op.CallAgentParams{
 		AgentID: strings.TrimSpace(agentID),
 		Meta:    meta,
 		Content: content,
@@ -433,10 +477,11 @@ func (conn *Connection) CallAgent(ctx context.Context, agentID string, meta op.M
 }
 
 func (conn *Connection) OpNode(ctx context.Context, params *op.OpNodeParams) (*op.OpNodeResult, error) {
-	if conn == nil || conn.Session == nil {
+	session := conn.currentSession()
+	if session == nil {
 		return nil, fmt.Errorf("connection session is nil")
 	}
-	result, err := conn.Session.OpNode(ctx, params)
+	result, err := session.OpNode(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -449,11 +494,15 @@ func (conn *Connection) ListToolSpecs() ([]*op.ToolSpec, error) {
 }
 
 func (conn *Connection) ListToolSpecsContext(ctx context.Context) ([]*op.ToolSpec, error) {
+	session := conn.currentSession()
+	if session == nil {
+		return nil, fmt.Errorf("connection session is nil")
+	}
 	if ctx == nil {
 		ctx = conn.Ctx
 	}
 	toolSpecs := make([]*op.ToolSpec, 0)
-	toolResult, err := conn.Session.ListTools(ctx, &op.ListToolsParams{})
+	toolResult, err := session.ListTools(ctx, &op.ListToolsParams{})
 	if err != nil {
 		return nil, err
 	}
@@ -474,10 +523,11 @@ func (conn *Connection) ListToolSpecsContext(ctx context.Context) ([]*op.ToolSpe
 }
 
 func (conn *Connection) CallTool(ctx context.Context, params *op.CallToolParams) (*op.CallToolResult, error) {
-	if conn == nil || conn.Session == nil {
+	session := conn.currentSession()
+	if session == nil {
 		return nil, fmt.Errorf("connection session is nil")
 	}
-	result, err := conn.Session.CallTool(ctx, params)
+	result, err := session.CallTool(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -486,10 +536,11 @@ func (conn *Connection) CallTool(ctx context.Context, params *op.CallToolParams)
 }
 
 func (conn *Connection) NotifyInfo(ctx context.Context, params *op.InfoNotificationParams) error {
-	if conn == nil || conn.Session == nil {
+	session := conn.currentSession()
+	if session == nil {
 		return fmt.Errorf("connection session is nil")
 	}
-	if err := conn.Session.NotifyInfo(ctx, params); err != nil {
+	if err := session.NotifyInfo(ctx, params); err != nil {
 		return err
 	}
 	conn.markOutgoingProtocolTraffic()

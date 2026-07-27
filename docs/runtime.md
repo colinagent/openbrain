@@ -321,8 +321,9 @@ persisted as a successful assistant message and must not trigger tool execution.
 
 Retryable failures use the normal automatic retry loop (five retries by
 default, with bounded exponential delay and jitter). Every model-call attempt receives a
-new `RequestID`; all attempts retain the durable `ThreadID`. This keeps retries
-observable without treating a whole turn as one ambiguous transport request.
+new `RequestID`; all attempts retain the durable `ThreadID` and stable `TurnID`.
+This keeps retries observable without treating a whole turn as one ambiguous
+transport request, while preserving a distinct billing-turn identity.
 Surfaces may show live partial output, but they must clear transient attempt
 artifacts when an automatic retry starts.
 

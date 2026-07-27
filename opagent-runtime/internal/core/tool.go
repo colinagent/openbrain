@@ -220,7 +220,7 @@ func callTool(loop *Loop, tc ToolCall, serverID, toolName string) (string, *op.C
 	}
 
 	conn := GetConn(serverID)
-	if conn == nil || conn.Session == nil {
+	if conn == nil || !conn.hasSession() {
 		loadedNode, err := loadNode()
 		if err != nil {
 			return "", nil, err

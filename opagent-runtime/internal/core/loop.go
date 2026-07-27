@@ -1069,6 +1069,7 @@ func (l *AgentLoop) streamAssistantTurnResult() (assistantTurnResult, error) {
 		},
 		RequestID: l.nextModelRequestID(),
 		ThreadID:  strings.TrimSpace(l.ThreadID),
+		TurnID:    strings.TrimSpace(l.TurnID),
 	}
 	if len(tools) > 0 {
 		rawChoice, _ := json.Marshal("auto")

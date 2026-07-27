@@ -29,6 +29,9 @@ func TestGatewayCanonicalWSProvider_StreamCanonicalUsesWebsocket(t *testing.T) {
 		if got := r.Header.Get("X-Thread-ID"); got != "thread-canonical" {
 			t.Fatalf("X-Thread-ID = %q, want thread-canonical", got)
 		}
+		if got := r.Header.Get("X-Turn-ID"); got != "turn-canonical" {
+			t.Fatalf("X-Turn-ID = %q, want turn-canonical", got)
+		}
 		conn, err := websocket.Upgrade(w, r, nil, 0, 0)
 		if err != nil {
 			t.Fatalf("upgrade websocket: %v", err)
@@ -83,6 +86,7 @@ func TestGatewayCanonicalWSProvider_StreamCanonicalUsesWebsocket(t *testing.T) {
 		Config:    ai.GenerationConfig{Model: "claude-opus-4-6"},
 		RequestID: "req-canonical",
 		ThreadID:  "thread-canonical",
+		TurnID:    "turn-canonical",
 	})
 	if err != nil {
 		t.Fatalf("StreamCanonical(): %v", err)

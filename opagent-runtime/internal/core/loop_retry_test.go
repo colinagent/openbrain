@@ -344,6 +344,7 @@ func newRetryTestLoop(provider ai.CanonicalProvider) *AgentLoop {
 		Ctx:      context.Background(),
 		Meta:     op.Meta{"threadID": "thread-retry-test"},
 		ThreadID: "thread-retry-test",
+		TurnID:   "turn-retry-test",
 		Agent: &Agent{
 			ToolSpecs: map[string]*op.ToolSpec{},
 		},
@@ -722,6 +723,9 @@ func TestStreamAssistantTurnResultWithRetry_RetriesPartialUnexpectedEOFWithFresh
 	for i, req := range provider.requests {
 		if req.ThreadID != "thread-retry-test" {
 			t.Fatalf("request[%d].ThreadID = %q, want thread-retry-test", i, req.ThreadID)
+		}
+		if req.TurnID != "turn-retry-test" {
+			t.Fatalf("request[%d].TurnID = %q, want turn-retry-test", i, req.TurnID)
 		}
 	}
 }

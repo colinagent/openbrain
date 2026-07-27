@@ -174,7 +174,7 @@ func ListActiveConnectionSnapshots(now time.Time) []*ConnectionRuntimeSnapshot {
 	}
 	out := make([]*ConnectionRuntimeSnapshot, 0, len(conns))
 	for _, conn := range conns {
-		if conn == nil || conn.Session == nil {
+		if conn == nil || !conn.hasSession() {
 			continue
 		}
 		snapshot := conn.RuntimeSnapshot(now)

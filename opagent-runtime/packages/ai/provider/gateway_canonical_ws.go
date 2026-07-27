@@ -147,6 +147,9 @@ func (p *GatewayCanonicalWSProvider) requestHeaders(req *ai.ProviderRequest) htt
 	if threadID := strings.TrimSpace(req.ThreadID); threadID != "" {
 		headers.Set("X-Thread-ID", threadID)
 	}
+	if turnID := strings.TrimSpace(req.TurnID); turnID != "" {
+		headers.Set("X-Turn-ID", turnID)
+	}
 	return headers
 }
 

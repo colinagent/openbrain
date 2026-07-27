@@ -102,6 +102,7 @@ type ProviderRequest struct {
 	PreviousResponseID string              `json:"previousResponseID,omitempty"`
 	RequestID          string              `json:"requestID,omitempty"`
 	ThreadID           string              `json:"-"`
+	TurnID             string              `json:"-"`
 }
 
 type ProviderResponse struct {
