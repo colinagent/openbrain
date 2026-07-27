@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"sync"
 )
 
 // ResponsesProvider is the native Responses API surface used when callers need
@@ -99,29 +100,44 @@ type ResponsesStreamEvent struct {
 }
 
 type ResponsesEventStream struct {
-	events  chan ResponsesStreamEvent
-	current ResponsesStreamEvent
-	closed  bool
-	err     error
+	events    chan ResponsesStreamEvent
+	done      chan struct{}
+	closeOnce sync.Once
+	errMu     sync.RWMutex
+	current   ResponsesStreamEvent
+	err       error
 }
 
 func NewResponsesEventStream(buffer int) *ResponsesEventStream {
 	if buffer < 0 {
 		buffer = 0
 	}
-	return &ResponsesEventStream{events: make(chan ResponsesStreamEvent, buffer)}
+	return &ResponsesEventStream{
+		events: make(chan ResponsesStreamEvent, buffer),
+		done:   make(chan struct{}),
+	}
 }
 
 func (s *ResponsesEventStream) Next() bool {
-	event, ok := <-s.events
-	if !ok {
-		return false
+	select {
+	case event := <-s.events:
+		s.setCurrent(event)
+		return true
+	default:
 	}
-	s.current = event
-	if event.Error != nil && s.err == nil {
-		s.err = event.Error
+	select {
+	case event := <-s.events:
+		s.setCurrent(event)
+		return true
+	case <-s.done:
+		select {
+		case event := <-s.events:
+			s.setCurrent(event)
+			return true
+		default:
+			return false
+		}
 	}
-	return true
 }
 
 func (s *ResponsesEventStream) Event() ResponsesStreamEvent {
@@ -129,29 +145,53 @@ func (s *ResponsesEventStream) Event() ResponsesStreamEvent {
 }
 
 func (s *ResponsesEventStream) Err() error {
+	s.errMu.RLock()
+	defer s.errMu.RUnlock()
 	return s.err
 }
 
 func (s *ResponsesEventStream) Emit(event ResponsesStreamEvent) bool {
-	if s.closed {
+	select {
+	case <-s.done:
 		return false
+	default:
 	}
-	s.events <- event
-	return true
+	select {
+	case <-s.done:
+		return false
+	case s.events <- event:
+		return true
+	}
 }
 
 func (s *ResponsesEventStream) Finish(err error) {
-	if err != nil && s.err == nil {
-		s.err = err
+	if err != nil {
+		s.setError(err)
 		_ = s.Emit(ResponsesStreamEvent{Type: "response.failed", Error: err})
 	}
 	s.Close()
 }
 
 func (s *ResponsesEventStream) Close() {
-	if s.closed {
+	s.closeOnce.Do(func() {
+		close(s.done)
+	})
+}
+
+func (s *ResponsesEventStream) setCurrent(event ResponsesStreamEvent) {
+	s.current = event
+	if event.Error != nil {
+		s.setError(event.Error)
+	}
+}
+
+func (s *ResponsesEventStream) setError(err error) {
+	if err == nil {
 		return
 	}
-	s.closed = true
-	close(s.events)
+	s.errMu.Lock()
+	defer s.errMu.Unlock()
+	if s.err == nil {
+		s.err = err
+	}
 }

@@ -33,6 +33,17 @@ type partialStreamCanonicalProvider struct {
 	err    error
 }
 
+type streamAttempt struct {
+	events []ai.ProviderEvent
+	err    error
+}
+
+type attemptSequenceCanonicalProvider struct {
+	attempts []streamAttempt
+	requests []ai.ProviderRequest
+	calls    int
+}
+
 func (p *retrySequenceCanonicalProvider) Capabilities() ai.ProviderCapabilities {
 	return ai.ProviderCapabilities{
 		SupportsThinkingBlocks:     true,
@@ -117,6 +128,34 @@ func (p *partialStreamCanonicalProvider) StreamCanonical(context.Context, *ai.Pr
 			_ = stream.Emit(event)
 		}
 		stream.Finish(p.err)
+	}()
+	return stream, nil
+}
+
+func (p *attemptSequenceCanonicalProvider) Capabilities() ai.ProviderCapabilities {
+	return (&partialStreamCanonicalProvider{}).Capabilities()
+}
+
+func (p *attemptSequenceCanonicalProvider) CompleteCanonical(context.Context, *ai.ProviderRequest) (*ai.ProviderResponse, error) {
+	return nil, errors.New("unexpected CompleteCanonical call")
+}
+
+func (p *attemptSequenceCanonicalProvider) StreamCanonical(_ context.Context, req *ai.ProviderRequest) (*ai.ProviderEventStream, error) {
+	index := p.calls
+	p.calls++
+	if req != nil {
+		p.requests = append(p.requests, *req)
+	}
+	if index >= len(p.attempts) {
+		return nil, errors.New("missing scripted stream attempt")
+	}
+	attempt := p.attempts[index]
+	stream := ai.NewProviderEventStream(len(attempt.events) + 1)
+	go func() {
+		for _, event := range attempt.events {
+			_ = stream.Emit(event)
+		}
+		stream.Finish(attempt.err)
 	}()
 	return stream, nil
 }
@@ -302,8 +341,9 @@ func partialTextThinkingEvents(text, thinking string) []ai.ProviderEvent {
 
 func newRetryTestLoop(provider ai.CanonicalProvider) *AgentLoop {
 	return &AgentLoop{
-		Ctx:  context.Background(),
-		Meta: op.Meta{"threadID": "thread-retry-test"},
+		Ctx:      context.Background(),
+		Meta:     op.Meta{"threadID": "thread-retry-test"},
+		ThreadID: "thread-retry-test",
 		Agent: &Agent{
 			ToolSpecs: map[string]*op.ToolSpec{},
 		},
@@ -556,7 +596,7 @@ func TestStreamAssistantTurnResult_DoesNotMergeWhenFinalHasText(t *testing.T) {
 	}
 }
 
-func TestStreamAssistantTurnResult_PreservesPartialTextOnCanceledStream(t *testing.T) {
+func TestStreamAssistantTurnResult_RejectsPartialTextOnCanceledStream(t *testing.T) {
 	drainNotifyChan()
 	t.Cleanup(drainNotifyChan)
 
@@ -566,19 +606,12 @@ func TestStreamAssistantTurnResult_PreservesPartialTextOnCanceledStream(t *testi
 	}
 	loop := newRetryTestLoop(provider)
 
-	result, err := loop.streamAssistantTurnResult()
-	if err != nil {
-		t.Fatalf("streamAssistantTurnResult(): %v", err)
-	}
-	if got := result.message.Content; got != "visible before cancel" {
-		t.Fatalf("assistant content = %q, want partial text", got)
-	}
-	if got := result.message.StopReason; got != op.StopReasonAborted {
-		t.Fatalf("stop reason = %q, want %q", got, op.StopReasonAborted)
+	if _, err := loop.streamAssistantTurnResult(); !errors.Is(err, context.Canceled) {
+		t.Fatalf("streamAssistantTurnResult() error = %v, want context cancellation", err)
 	}
 }
 
-func TestStreamAssistantTurnResult_PreservesPartialTextAndThinkingOnStreamError(t *testing.T) {
+func TestStreamAssistantTurnResult_RejectsPartialTextAndThinkingOnStreamError(t *testing.T) {
 	drainNotifyChan()
 	t.Cleanup(drainNotifyChan)
 
@@ -588,28 +621,12 @@ func TestStreamAssistantTurnResult_PreservesPartialTextAndThinkingOnStreamError(
 	}
 	loop := newRetryTestLoop(provider)
 
-	result, err := loop.streamAssistantTurnResult()
-	if err != nil {
-		t.Fatalf("streamAssistantTurnResult(): %v", err)
-	}
-	if got := result.message.Content; got != "visible before error" {
-		t.Fatalf("assistant content = %q, want partial text", got)
-	}
-	if got := result.message.ReasoningContent; got != "private reasoning" {
-		t.Fatalf("reasoning content = %q, want partial thinking", got)
-	}
-	if result.message.ReasoningReplayField != "reasoning_content" || result.message.ReasoningSignature != "sig_1" {
-		t.Fatalf("reasoning metadata = (%q, %q), want replay field/signature", result.message.ReasoningReplayField, result.message.ReasoningSignature)
-	}
-	if got := result.message.StopReason; got != op.StopReasonError {
-		t.Fatalf("stop reason = %q, want %q", got, op.StopReasonError)
-	}
-	if !strings.Contains(string(result.canonical.Raw), `"errorMessage":"upstream 503"`) {
-		t.Fatalf("canonical raw = %s, want errorMessage", result.canonical.Raw)
+	if _, err := loop.streamAssistantTurnResult(); err == nil || !strings.Contains(err.Error(), "upstream 503") {
+		t.Fatalf("streamAssistantTurnResult() error = %v, want upstream failure", err)
 	}
 }
 
-func TestStreamAssistantTurnResult_PreservesThinkingOnlyOnCanceledStream(t *testing.T) {
+func TestStreamAssistantTurnResult_RejectsThinkingOnlyOnCanceledStream(t *testing.T) {
 	drainNotifyChan()
 	t.Cleanup(drainNotifyChan)
 
@@ -619,29 +636,16 @@ func TestStreamAssistantTurnResult_PreservesThinkingOnlyOnCanceledStream(t *test
 	}
 	loop := newRetryTestLoop(provider)
 
-	result, err := loop.streamAssistantTurnResult()
-	if err != nil {
-		t.Fatalf("streamAssistantTurnResult(): %v", err)
-	}
-	if got := result.message.Content; got != "" {
-		t.Fatalf("assistant content = %q, want empty visible text", got)
-	}
-	if got := result.message.ReasoningContent; got != "thinking before cancel" {
-		t.Fatalf("reasoning content = %q, want partial thinking", got)
-	}
-	if got := result.message.StopReason; got != op.StopReasonAborted {
-		t.Fatalf("stop reason = %q, want %q", got, op.StopReasonAborted)
-	}
-	if len(result.canonical.Content) != 1 || result.canonical.Content[0].Type != ai.BlockThinking {
-		t.Fatalf("canonical content = %#v, want one thinking block", result.canonical.Content)
+	if _, err := loop.streamAssistantTurnResult(); !errors.Is(err, context.Canceled) {
+		t.Fatalf("streamAssistantTurnResult() error = %v, want context cancellation", err)
 	}
 }
 
 // TestStreamAssistantTurnResult_AbortsWhenTurnContextCancelledEvenWithWrappedStreamError
 // models the production gateway websocket path: context cancellation surfaces as a
-// wrapped transport error that no longer satisfies errors.Is(err, context.Canceled),
-// while the turn context itself is cancelled. The fallback must still be labeled aborted.
-func TestStreamAssistantTurnResult_AbortsWhenTurnContextCancelledEvenWithWrappedStreamError(t *testing.T) {
+// wrapped transport error that no longer satisfies errors.Is(err, context.Canceled).
+// It must still fail the attempt instead of persisting partial output as success.
+func TestStreamAssistantTurnResult_FailsWhenTurnContextCancelledWithWrappedStreamError(t *testing.T) {
 	drainNotifyChan()
 	t.Cleanup(drainNotifyChan)
 
@@ -654,15 +658,99 @@ func TestStreamAssistantTurnResult_AbortsWhenTurnContextCancelledEvenWithWrapped
 	loop.Ctx = ctx
 	cancel()
 
-	result, err := loop.streamAssistantTurnResult()
+	if _, err := loop.streamAssistantTurnResult(); err == nil || !strings.Contains(err.Error(), "close 1006") {
+		t.Fatalf("streamAssistantTurnResult() error = %v, want wrapped transport failure", err)
+	}
+}
+
+func TestStreamAssistantTurnResultWithRetry_RetriesPartialUnexpectedEOFWithFreshRequestID(t *testing.T) {
+	drainNotifyChan()
+	t.Cleanup(drainNotifyChan)
+
+	prevMaxRetries := autoRetryMaxRetries
+	prevBaseDelay := autoRetryBaseDelay
+	prevMaxDelay := autoRetryMaxDelay
+	autoRetryMaxRetries = 3
+	autoRetryBaseDelay = time.Millisecond
+	autoRetryMaxDelay = time.Second
+	t.Cleanup(func() {
+		autoRetryMaxRetries = prevMaxRetries
+		autoRetryBaseDelay = prevBaseDelay
+		autoRetryMaxDelay = prevMaxDelay
+	})
+
+	partialEvents := make([]ai.ProviderEvent, 0, 6001)
+	partialEvents = append(partialEvents, ai.ProviderEvent{Type: ai.EventCanonicalStart})
+	for i := 0; i < 6000; i++ {
+		partialEvents = append(partialEvents, ai.ProviderEvent{
+			Type:         ai.EventCanonicalTextDelta,
+			ContentIndex: 0,
+			Delta:        "x",
+		})
+	}
+	provider := &attemptSequenceCanonicalProvider{attempts: []streamAttempt{
+		{
+			events: partialEvents,
+			err: ai.WrapRetryError(
+				errors.New("websocket: close 1006 unexpected EOF"),
+				0,
+				"upstream_error",
+				"websocket: close 1006 unexpected EOF",
+				0,
+			),
+		},
+		{
+			events: []ai.ProviderEvent{{Type: ai.EventCanonicalDone, Response: assistantProviderResponse("complete after retry")}},
+		},
+	}}
+	loop := newRetryTestLoop(provider)
+	loop.Meta["turnRequestID"] = "turn-request"
+
+	result, err := loop.streamAssistantTurnResultWithRetry()
 	if err != nil {
-		t.Fatalf("streamAssistantTurnResult(): %v", err)
+		t.Fatalf("streamAssistantTurnResultWithRetry(): %v", err)
 	}
-	if got := result.message.Content; got != "visible before cancel" {
-		t.Fatalf("assistant content = %q, want partial text", got)
+	if result.message.Content != "complete after retry" || provider.calls != 2 {
+		t.Fatalf("result = %q, calls = %d; want completed second attempt", result.message.Content, provider.calls)
 	}
-	if got := result.message.StopReason; got != op.StopReasonAborted {
-		t.Fatalf("stop reason = %q, want %q (turn context cancelled should override wrapped stream error)", got, op.StopReasonAborted)
+	if len(provider.requests) != 2 {
+		t.Fatalf("requests = %d, want 2", len(provider.requests))
+	}
+	if provider.requests[0].RequestID != "turn-request-call-1" || provider.requests[1].RequestID != "turn-request-call-2" {
+		t.Fatalf("request IDs = (%q, %q), want unique per-attempt IDs", provider.requests[0].RequestID, provider.requests[1].RequestID)
+	}
+	for i, req := range provider.requests {
+		if req.ThreadID != "thread-retry-test" {
+			t.Fatalf("request[%d].ThreadID = %q, want thread-retry-test", i, req.ThreadID)
+		}
+	}
+}
+
+func TestStreamAssistantTurnResultWithRetry_RetriesCleanCloseBeforeDone(t *testing.T) {
+	drainNotifyChan()
+	t.Cleanup(drainNotifyChan)
+
+	prevMaxRetries := autoRetryMaxRetries
+	prevBaseDelay := autoRetryBaseDelay
+	autoRetryMaxRetries = 1
+	autoRetryBaseDelay = 0
+	t.Cleanup(func() {
+		autoRetryMaxRetries = prevMaxRetries
+		autoRetryBaseDelay = prevBaseDelay
+	})
+
+	provider := &attemptSequenceCanonicalProvider{attempts: []streamAttempt{
+		{events: partialTextEvents("not terminal")},
+		{events: []ai.ProviderEvent{{Type: ai.EventCanonicalDone, Response: assistantProviderResponse("done")}}},
+	}}
+	loop := newRetryTestLoop(provider)
+
+	result, err := loop.streamAssistantTurnResultWithRetry()
+	if err != nil {
+		t.Fatalf("streamAssistantTurnResultWithRetry(): %v", err)
+	}
+	if provider.calls != 2 || result.message.Content != "done" {
+		t.Fatalf("calls = %d, content = %q; want retry then done", provider.calls, result.message.Content)
 	}
 }
 
@@ -716,5 +804,25 @@ func TestStreamAssistantTurnResultWithRetry_DoesNotRetryDeterministicFailure(t *
 		if typ == "auto_retry_start" || typ == "auto_retry_end" {
 			t.Fatalf("unexpected retry lifecycle event %q", typ)
 		}
+	}
+}
+
+func TestResolveAutoRetryDelay_UsesCodexStyleJitterAndHonorsRetryAfter(t *testing.T) {
+	previousBase := autoRetryBaseDelay
+	previousMax := autoRetryMaxDelay
+	autoRetryBaseDelay = 200 * time.Millisecond
+	autoRetryMaxDelay = 60 * time.Second
+	t.Cleanup(func() {
+		autoRetryBaseDelay = previousBase
+		autoRetryMaxDelay = previousMax
+	})
+
+	delay := resolveAutoRetryDelay(3, nil)
+	if delay < 720*time.Millisecond || delay > 880*time.Millisecond {
+		t.Fatalf("resolveAutoRetryDelay(3) = %v, want 800ms +/- 10%%", delay)
+	}
+	retryAfter := resolveAutoRetryDelay(3, &ai.RetryError{RetryAfterMs: 1500})
+	if retryAfter != 1500*time.Millisecond {
+		t.Fatalf("retry-after delay = %v, want 1.5s", retryAfter)
 	}
 }

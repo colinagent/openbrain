@@ -312,27 +312,37 @@ and the full-file `revision` while only returning the requested entry window.
 
 ### Streaming Turn Finalization
 
-For streaming model APIs, the provider's accumulated stream partial is the
-source of truth for terminal assistant content. A provider may use upstream
-completed payloads to fill block metadata, usage, stop reason, response ids, or
-completed tool-call arguments, but it must not let an empty or partial completed
-payload erase text or reasoning already emitted as stream deltas.
+Streaming deltas are transient presentation state. Runtime accepts a model call
+as successful only after it observes an explicit canonical `done` event with a
+semantic response. EOF, cancellation, a transport error, invalid wire data, or
+an `error` event before `done` fails that attempt even when substantial text or
+thinking has already streamed. Partial output from a failed attempt must not be
+persisted as a successful assistant message and must not trigger tool execution.
 
-Runtime treats the terminal provider response as the durable assistant message.
-If that terminal response contains semantic blocks such as thinking or tool
-calls but is missing visible text that was already streamed, runtime merges the
-missing partial text before the first tool call. If the stream errors or is
-cancelled after semantic partial content was emitted, runtime can persist a
-terminal assistant message derived from the partial instead of falling back to
-a text-only error placeholder. Visible text is retained; reasoning blocks are
-retained for aborted or failed turns so replay metadata remains available.
-Stream error details live in the canonical message raw payload, not in a new
-wire field.
+Retryable failures use the normal automatic retry loop (five retries by
+default, with bounded exponential delay and jitter). Every model-call attempt receives a
+new `RequestID`; all attempts retain the durable `ThreadID`. This keeps retries
+observable without treating a whole turn as one ambiguous transport request.
+Surfaces may show live partial output, but they must clear transient attempt
+artifacts when an automatic retry starts.
 
-Markdown chat files remain projections. They are updated from terminal turn
-results, not from live deltas. When a failed or aborted turn has reasoning but
-no visible assistant text, the projection writes a fixed interruption/failure
-notice while the durable canonical message keeps the reasoning content.
+After `done`, the terminal provider response is the durable assistant message.
+If that response contains semantic thinking or tool-call blocks but omits
+visible text that was already streamed in the same completed attempt, Runtime
+may merge the missing text before the first tool call. A completed partial may
+also fill an otherwise empty `done` response. This completion-only repair never
+turns a failed stream into success.
+
+For the managed canonical WebSocket hop, delta events contain only incremental
+fields; cumulative partial snapshots are not copied across the network. The
+Gateway sends exactly one `done` or `error` terminal event, Runtime acknowledges
+that terminal with `canonical.ack`, and the Gateway finishes with WebSocket
+close code `1000`. Runtime correctness depends on the terminal event it
+observed; the acknowledgement and normal close make terminal delivery auditable
+and prevent an ordinary successful request from appearing as abnormal EOF.
+
+Thread JSONL and Markdown projections are updated only from a completed turn or
+the existing durable turn-error path, never directly from live deltas.
 
 ### Reference Resolution
 

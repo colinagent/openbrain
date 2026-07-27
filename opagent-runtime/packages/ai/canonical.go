@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"sync"
 
 	"github.com/colinagent/openbrain/opagent-protocol/go-sdk/op"
 )
@@ -100,6 +101,7 @@ type ProviderRequest struct {
 	Config             GenerationConfig    `json:"config"`
 	PreviousResponseID string              `json:"previousResponseID,omitempty"`
 	RequestID          string              `json:"requestID,omitempty"`
+	ThreadID           string              `json:"-"`
 }
 
 type ProviderResponse struct {
@@ -138,29 +140,44 @@ type ProviderEvent struct {
 }
 
 type ProviderEventStream struct {
-	events  chan ProviderEvent
-	current ProviderEvent
-	closed  bool
-	err     error
+	events    chan ProviderEvent
+	done      chan struct{}
+	closeOnce sync.Once
+	errMu     sync.RWMutex
+	current   ProviderEvent
+	err       error
 }
 
 func NewProviderEventStream(buffer int) *ProviderEventStream {
 	if buffer < 0 {
 		buffer = 0
 	}
-	return &ProviderEventStream{events: make(chan ProviderEvent, buffer)}
+	return &ProviderEventStream{
+		events: make(chan ProviderEvent, buffer),
+		done:   make(chan struct{}),
+	}
 }
 
 func (s *ProviderEventStream) Next() bool {
-	event, ok := <-s.events
-	if !ok {
-		return false
+	select {
+	case event := <-s.events:
+		s.setCurrent(event)
+		return true
+	default:
 	}
-	s.current = event
-	if event.Error != nil && s.err == nil {
-		s.err = event.Error
+	select {
+	case event := <-s.events:
+		s.setCurrent(event)
+		return true
+	case <-s.done:
+		select {
+		case event := <-s.events:
+			s.setCurrent(event)
+			return true
+		default:
+			return false
+		}
 	}
-	return true
 }
 
 func (s *ProviderEventStream) Event() ProviderEvent {
@@ -168,31 +185,56 @@ func (s *ProviderEventStream) Event() ProviderEvent {
 }
 
 func (s *ProviderEventStream) Err() error {
+	s.errMu.RLock()
+	defer s.errMu.RUnlock()
 	return s.err
 }
 
 func (s *ProviderEventStream) Emit(event ProviderEvent) bool {
-	if s.closed {
+	cloned := cloneProviderEvent(event)
+	select {
+	case <-s.done:
 		return false
+	default:
 	}
-	s.events <- cloneProviderEvent(event)
-	return true
+	select {
+	case <-s.done:
+		return false
+	case s.events <- cloned:
+		return true
+	}
 }
 
 func (s *ProviderEventStream) Finish(err error) {
-	if err != nil && s.err == nil {
-		s.err = err
+	if err != nil {
+		s.setError(err)
 		_ = s.Emit(ProviderEvent{Type: EventCanonicalError, Error: err})
 	}
 	s.Close()
 }
 
 func (s *ProviderEventStream) Close() {
-	if s.closed {
+	s.closeOnce.Do(func() {
+		close(s.done)
+	})
+}
+
+func (s *ProviderEventStream) setCurrent(event ProviderEvent) {
+	s.current = event
+	if event.Error != nil {
+		s.setError(event.Error)
+	}
+}
+
+func (s *ProviderEventStream) setError(err error) {
+	if err == nil {
 		return
 	}
-	s.closed = true
-	close(s.events)
+	s.errMu.Lock()
+	defer s.errMu.Unlock()
+	if s.err == nil {
+		s.err = err
+	}
 }
 
 func cloneProviderEvent(event ProviderEvent) ProviderEvent {

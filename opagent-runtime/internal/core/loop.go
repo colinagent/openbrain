@@ -49,6 +49,7 @@ type AgentLoop struct {
 	getSteeringMessages  func(context.Context) ([]PendingLoopMessage, error)
 	initialQueuePending  *PendingLoopMessage
 	rebuildModel         func(context.Context, op.Meta) (*ModelClient, error)
+	modelRequestSeq      int
 }
 
 func resolvedThreadPath(meta op.ThreadMeta) string {
@@ -1066,7 +1067,8 @@ func (l *AgentLoop) streamAssistantTurnResult() (assistantTurnResult, error) {
 			ServiceTier:    serviceTierForModelMeta(l.Model.config, l.Meta),
 			PromptCacheKey: loopPromptCacheKey(l),
 		},
-		RequestID: strings.TrimSpace(metaString(l.Meta, "turnRequestID")),
+		RequestID: l.nextModelRequestID(),
+		ThreadID:  strings.TrimSpace(l.ThreadID),
 	}
 	if len(tools) > 0 {
 		rawChoice, _ := json.Marshal("auto")
@@ -1108,6 +1110,7 @@ func (l *AgentLoop) streamAssistantTurnResult() (assistantTurnResult, error) {
 
 	var final *ai.ProviderResponse
 	var lastPartial *ai.StreamConversationMessage
+	sawDone := false
 	stream, err := canonical.StreamCanonical(l.Ctx, req)
 	if err != nil {
 		if !errors.Is(err, ai.ErrStreamingNotSupported) {
@@ -1128,33 +1131,51 @@ func (l *AgentLoop) streamAssistantTurnResult() (assistantTurnResult, error) {
 			emitCanonicalLifecycleEvent(l.Meta, event)
 			if event.Type == ai.EventCanonicalDone {
 				final = event.Response
+				sawDone = true
 			}
 		}
-		if err := stream.Err(); err != nil {
-			stopReason := ai.StopReasonError
-			// Providers (e.g. the gateway websocket provider) may surface
-			// context cancellation as a wrapped transport error that no longer
-			// satisfies errors.Is(err, context.Canceled). Treat the turn context
-			// itself as the source of truth for the aborted semantic.
-			if errors.Is(err, context.Canceled) || errors.Is(l.Ctx.Err(), context.Canceled) {
-				stopReason = ai.StopReasonAborted
+		if !sawDone {
+			if err := stream.Err(); err != nil {
+				return assistantTurnResult{}, fmt.Errorf("stream error: %w", err)
 			}
-			if fallback, ok := providerResponseFromPartialTerminal(lastPartial, stopReason, err); ok {
-				return buildAssistantMessage(fallback)
-			}
-			return assistantTurnResult{}, fmt.Errorf("stream error: %w", err)
+			return assistantTurnResult{}, fmt.Errorf("stream error: %w", ai.WrapRetryError(
+				fmt.Errorf("canonical stream ended before done: unexpected EOF"),
+				0,
+				"upstream_error",
+				"canonical stream ended before done: unexpected EOF",
+				0,
+			))
 		}
 	}
 	final = mergeMissingFinalTextFromPartial(final, lastPartial)
 	if !ai.HasSemanticCanonicalResponse(final) {
-		if fallback, ok := providerResponseFromPartialTerminal(lastPartial, ai.StopReasonStop, nil); ok {
+		if fallback, ok := providerResponseFromCompletedPartial(lastPartial); ok {
 			return buildAssistantMessage(fallback)
 		}
-	}
-	if final == nil {
-		return assistantTurnResult{}, fmt.Errorf("empty model response")
+		return assistantTurnResult{}, ai.WrapRetryError(
+			fmt.Errorf("canonical stream completed without a semantic response"),
+			0,
+			"upstream_error",
+			"canonical stream completed without a semantic response",
+			0,
+		)
 	}
 	return buildAssistantMessage(final)
+}
+
+func (l *AgentLoop) nextModelRequestID() string {
+	l.modelRequestSeq++
+	base := strings.TrimSpace(metaString(l.Meta, "turnRequestID"))
+	if base == "" {
+		base = strings.TrimSpace(l.TurnID)
+	}
+	if base == "" {
+		base = strings.TrimSpace(l.ThreadID)
+	}
+	if base == "" {
+		base = "model"
+	}
+	return fmt.Sprintf("%s-call-%d", base, l.modelRequestSeq)
 }
 
 func mergeMissingFinalTextFromPartial(final *ai.ProviderResponse, partial *ai.StreamConversationMessage) *ai.ProviderResponse {
@@ -1223,12 +1244,11 @@ func canonicalMessageHasVisibleText(msg ai.ConversationMessage) bool {
 	return false
 }
 
-func providerResponseFromPartialTerminal(partial *ai.StreamConversationMessage, stopReason ai.StopReason, streamErr error) (*ai.ProviderResponse, bool) {
+func providerResponseFromCompletedPartial(partial *ai.StreamConversationMessage) (*ai.ProviderResponse, bool) {
 	if partial == nil {
 		return nil, false
 	}
 	content := make([]ai.ContentBlock, 0, len(partial.Content))
-	includeThinking := stopReason == ai.StopReasonError || stopReason == ai.StopReasonAborted
 	for _, block := range partial.Content {
 		switch block.Type {
 		case ai.BlockText:
@@ -1245,7 +1265,7 @@ func providerResponseFromPartialTerminal(partial *ai.StreamConversationMessage, 
 			}
 			content = append(content, finalBlock)
 		case ai.BlockThinking:
-			if !includeThinking || !streamThinkingBlockHasContent(block) {
+			if !streamThinkingBlockHasContent(block) {
 				continue
 			}
 			finalBlock := ai.ContentBlock{
@@ -1270,16 +1290,18 @@ func providerResponseFromPartialTerminal(partial *ai.StreamConversationMessage, 
 		Role:       ai.RoleCanonicalAssistant,
 		Content:    content,
 		Timestamp:  partial.Timestamp,
-		StopReason: stopReason,
+		StopReason: ai.StopReasonStop,
 	}
 	if partial.ProviderState != nil {
 		providerState := *partial.ProviderState
 		message.ProviderState = &providerState
 	}
-	message.Raw = partialTerminalRaw(partial.Raw, streamErr)
+	if len(partial.Raw) > 0 {
+		message.Raw = append(json.RawMessage(nil), partial.Raw...)
+	}
 	return &ai.ProviderResponse{
 		Message:    message,
-		StopReason: stopReason,
+		StopReason: ai.StopReasonStop,
 	}, true
 }
 
@@ -1289,30 +1311,6 @@ func streamThinkingBlockHasContent(block ai.StreamContentBlock) bool {
 		strings.TrimSpace(block.ThinkingSignature) != "" ||
 		strings.TrimSpace(block.EncryptedContent) != "" ||
 		len(block.Raw) > 0
-}
-
-func partialTerminalRaw(partialRaw json.RawMessage, streamErr error) json.RawMessage {
-	if streamErr == nil {
-		if len(partialRaw) == 0 {
-			return nil
-		}
-		return append(json.RawMessage(nil), partialRaw...)
-	}
-	errorMessage := strings.TrimSpace(streamErr.Error())
-	if errorMessage == "" {
-		return nil
-	}
-	payload := map[string]any{
-		"errorMessage": errorMessage,
-	}
-	if len(partialRaw) > 0 && json.Valid(partialRaw) {
-		payload["partialRaw"] = append(json.RawMessage(nil), partialRaw...)
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return nil
-	}
-	return raw
 }
 
 func cloneCanonicalMessages(messages []ai.ConversationMessage) []ai.ConversationMessage {

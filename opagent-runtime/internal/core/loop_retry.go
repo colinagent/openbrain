@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"time"
 
@@ -13,8 +14,8 @@ import (
 )
 
 var (
-	autoRetryMaxRetries = 3
-	autoRetryBaseDelay  = 2 * time.Second
+	autoRetryMaxRetries = 5
+	autoRetryBaseDelay  = 200 * time.Millisecond
 	autoRetryMaxDelay   = 60 * time.Second
 )
 
@@ -167,6 +168,12 @@ func resolveAutoRetryDelay(nextAttempt int, retryErr *ai.RetryError) time.Durati
 	}
 	if delay < 0 {
 		return 0
+	}
+	if delay > 0 {
+		delay = time.Duration(float64(delay) * (0.9 + rand.Float64()*0.2))
+		if delay < time.Millisecond {
+			delay = time.Millisecond
+		}
 	}
 	return delay
 }

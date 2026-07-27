@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -46,7 +47,10 @@ func TestCanonicalStreamEventJSON_RoundTripError(t *testing.T) {
 			RetryAfterMs: 1200,
 		},
 	}
-	raw := RenderCanonicalStreamEventJSON(event)
+	raw, err := MarshalCanonicalStreamEventJSON(event)
+	if err != nil {
+		t.Fatalf("MarshalCanonicalStreamEventJSON(): %v", err)
+	}
 	parsed, err := ParseCanonicalStreamEventJSON(raw)
 	if err != nil {
 		t.Fatalf("ParseCanonicalStreamEventJSON(): %v", err)
@@ -75,7 +79,10 @@ func TestCanonicalStreamEventJSON_RoundTripDone(t *testing.T) {
 			StopReason: StopReasonStop,
 		},
 	}
-	raw := RenderCanonicalStreamEventJSON(event)
+	raw, err := MarshalCanonicalStreamEventJSON(event)
+	if err != nil {
+		t.Fatalf("MarshalCanonicalStreamEventJSON(): %v", err)
+	}
 	parsed, err := ParseCanonicalStreamEventJSON(raw)
 	if err != nil {
 		t.Fatalf("ParseCanonicalStreamEventJSON(): %v", err)
@@ -91,7 +98,7 @@ func TestCanonicalStreamEventJSON_RoundTripDone(t *testing.T) {
 	}
 }
 
-func TestCanonicalStreamEventJSON_RoundTripPartialToolCall(t *testing.T) {
+func TestCanonicalStreamEventJSON_ToolCallDeltaUsesCompactWireShape(t *testing.T) {
 	event := ProviderEvent{
 		Type:         EventCanonicalToolCallDelta,
 		ContentIndex: 1,
@@ -122,15 +129,75 @@ func TestCanonicalStreamEventJSON_RoundTripPartialToolCall(t *testing.T) {
 		},
 	}
 
-	raw := RenderCanonicalStreamEventJSON(event)
+	raw, err := MarshalCanonicalStreamEventJSON(event)
+	if err != nil {
+		t.Fatalf("MarshalCanonicalStreamEventJSON(): %v", err)
+	}
+	if strings.Contains(string(raw), `"partial"`) || strings.Contains(string(raw), `"block"`) {
+		t.Fatalf("wire event = %s, want delta-only payload", raw)
+	}
 	parsed, err := ParseCanonicalStreamEventJSON(raw)
 	if err != nil {
 		t.Fatalf("ParseCanonicalStreamEventJSON(): %v", err)
 	}
-	if parsed.Partial == nil || len(parsed.Partial.Content) != 2 {
-		t.Fatalf("parsed.Partial = %#v, want 2 content blocks", parsed.Partial)
+	if parsed.Partial != nil {
+		t.Fatalf("parsed.Partial = %#v, want nil compact wire partial", parsed.Partial)
 	}
-	if parsed.Block == nil || parsed.Block.ToolCall == nil || parsed.Block.ToolCall.Complete {
-		t.Fatalf("parsed.Block = %#v, want incomplete stream tool call", parsed.Block)
+	if parsed.Block != nil {
+		t.Fatalf("parsed.Block = %#v, want nil delta block", parsed.Block)
+	}
+	if parsed.Delta != event.Delta || parsed.ContentIndex != event.ContentIndex {
+		t.Fatalf("parsed delta = %#v, want delta/index preserved", parsed)
+	}
+}
+
+func TestCanonicalStreamEventJSON_RejectsSerializationFailure(t *testing.T) {
+	_, err := MarshalCanonicalStreamEventJSON(ProviderEvent{
+		Type: EventCanonicalDone,
+		Response: &ProviderResponse{Message: ConversationMessage{
+			Role: RoleCanonicalAssistant,
+			Raw:  []byte(`{"broken":`),
+		}},
+	})
+	if err == nil {
+		t.Fatal("MarshalCanonicalStreamEventJSON() error = nil, want invalid raw JSON failure")
+	}
+}
+
+func TestCanonicalStreamEventJSON_RejectsMissingTerminal(t *testing.T) {
+	for _, raw := range [][]byte{nil, []byte("   "), []byte("[DONE]")} {
+		if _, err := ParseCanonicalStreamEventJSON(raw); err == nil {
+			t.Fatalf("ParseCanonicalStreamEventJSON(%q) error = nil", raw)
+		}
+	}
+}
+
+func TestCanonicalStreamEventJSON_RejectsTerminalPayloadOnNonterminalEvent(t *testing.T) {
+	response := &ProviderResponse{Message: ConversationMessage{
+		Role:    RoleCanonicalAssistant,
+		Content: []ContentBlock{{Type: BlockText, Text: "hello"}},
+	}}
+	if _, err := MarshalCanonicalStreamEventJSON(ProviderEvent{Type: EventCanonicalStart, Response: response}); err == nil {
+		t.Fatal("MarshalCanonicalStreamEventJSON() accepted response on start event")
+	}
+	if _, err := MarshalCanonicalStreamEventJSON(ProviderEvent{Type: EventCanonicalTextDelta, Error: errors.New("boom")}); err == nil {
+		t.Fatal("MarshalCanonicalStreamEventJSON() accepted error payload on delta event")
+	}
+	if _, err := ParseCanonicalStreamEventJSON([]byte(`{"type":"start","error":{"message":"boom"}}`)); err == nil {
+		t.Fatal("ParseCanonicalStreamEventJSON() accepted error payload on start event")
+	}
+}
+
+func TestCanonicalWebsocketAckJSON_RoundTrip(t *testing.T) {
+	raw, err := MarshalCanonicalWebsocketAckJSON(EventCanonicalDone, "request-1")
+	if err != nil {
+		t.Fatalf("MarshalCanonicalWebsocketAckJSON(): %v", err)
+	}
+	terminalType, requestID, err := DecodeCanonicalWebsocketAckJSON(raw)
+	if err != nil {
+		t.Fatalf("DecodeCanonicalWebsocketAckJSON(): %v", err)
+	}
+	if terminalType != EventCanonicalDone || requestID != "request-1" {
+		t.Fatalf("ack = (%q, %q), want (done, request-1)", terminalType, requestID)
 	}
 }

@@ -97,11 +97,11 @@ func ParseCanonicalAPIResponseJSON(raw []byte) (*ProviderResponse, error) {
 	}, nil
 }
 
-func RenderCanonicalAPIResponseJSON(resp *ProviderResponse) json.RawMessage {
+func MarshalCanonicalAPIResponseJSON(resp *ProviderResponse) ([]byte, error) {
 	if resp == nil {
-		resp = &ProviderResponse{}
+		return nil, fmt.Errorf("canonical response is nil")
 	}
-	data, _ := json.Marshal(struct {
+	return json.Marshal(struct {
 		Message    ConversationMessage `json:"message"`
 		Usage      Usage               `json:"usage"`
 		StopReason StopReason          `json:"stopReason,omitempty"`
@@ -110,5 +110,4 @@ func RenderCanonicalAPIResponseJSON(resp *ProviderResponse) json.RawMessage {
 		Usage:      resp.Usage,
 		StopReason: resp.StopReason,
 	})
-	return data
 }

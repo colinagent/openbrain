@@ -272,11 +272,30 @@ keep helper aliases and streaming-only types, but persisted thread entry shapes
 are protocol owned. Product-level user questions and approvals are message records
 (`message_publish` with `kind=request` and `questions[]`); durable thread entries
 do not define separate `elicitation_request` or `elicitation_result` records.
-Streaming deltas are presentation events, not durable history. A completed turn
-persists as a canonical assistant message in thread JSONL; failed or aborted
-streams may include provider error detail inside the canonical message raw
-payload, but the protocol does not define a separate stream-error field for
-thread entries.
+Streaming deltas are presentation events, not durable history. Only an explicit
+canonical `done` event permits a completed assistant message to be persisted in
+thread JSONL. An `error` event, EOF, cancellation, or invalid event before
+`done` fails the model-call attempt; partial output from that attempt is not a
+successful assistant turn. Durable exhausted-retry failures use the existing
+turn error representation rather than inventing a stream-error field in
+canonical message entries.
+
+The managed canonical WebSocket transport is a one-request connection. Its
+wire contract is:
+
+1. The client sends one canonical create payload with a unique model-call
+   `RequestID`; `ThreadID` is carried separately as stable request metadata.
+2. The server sends compact incremental events. Delta events do not repeat a
+   cumulative partial snapshot.
+3. The server sends exactly one terminal `done` or `error` event. A `done` event
+   must carry a semantic canonical response.
+4. The client replies with `{"type":"canonical.ack","terminalType":"done|error","requestID":"..."}`.
+5. The server sends WebSocket close code `1000` and closes the connection.
+
+Malformed events and clean connection close before a terminal event are
+retryable transport failures. A failed event serialization must be replaced by
+a valid structured `error` terminal; implementations must never ignore JSON or
+WebSocket write errors.
 Message request questions use the message `title` as the display/business
 heading and keep question payloads minimal: `questions[].id`,
 `questions[].question`, and `questions[].options[].id/label`. Clients add the
