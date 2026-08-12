@@ -4,11 +4,10 @@
 
 > **构建你的第二大脑，连接其他人的大脑。**
 
-OpenBrain 是一个 Agent OS，让知识、Agents、Skills、Tools 与 MCP Servers
-在同一个本地/远程统一 Runtime 中协同工作。可复用的 Runtime、协议、
-Agents、Tools 与 Skills 在这个公共仓库中开发。
+OpenBrain 帮你把知识构建成一个持久的第二大脑，再连接个人、团队与公开大脑。
+你的 Agents 可以按需查询你允许连接的大脑，而每一条连接都保持明确并由你控制。
 
-[下载](https://openbrain.chat/download) · [官网](https://openbrain.chat) · [了解 Agent OS](https://openbrain.chat/zh-CN/agent-os)
+[下载](https://openbrain.chat/download) · [官网](https://openbrain.chat) · [了解 Runtime](https://openbrain.chat/zh-CN/agent-os)
 
 ## 构建你的第二大脑
 
@@ -19,9 +18,10 @@ Agents、Tools 与 Skills 在这个公共仓库中开发。
 连接个人、团队与公开大脑，不必把所有知识压进同一个存储。Runtime 只在任务需要时，
 在明确的访问与权限边界内查询已连接的大脑。
 
-## Agent OS
+## The runtime your agents live on
 
-Agent Runtime 是内核，OpenBrain 在其周围组成完整系统：
+Runtime 让第二大脑真正运行起来，为 Agents 提供使用知识、调用工具、协作和记忆所需的
+上下文与能力：
 
 - **Agents** — Coder、自定义 Agent、Memory Agent，以及受支持的知识 Agent。
 - **Skills** — 按需加载的可复用 `SKILL.md` 工作流包。
@@ -41,7 +41,7 @@ GBrain 是 OpenBrain 支持的知识 Agent 与 Brain 集成。需要它的知识
 
 ## 开箱运行
 
-下载 OpenBrain，构建你的第二大脑，并在本地或远程工作区运行 Agent OS。
+下载 OpenBrain，构建你的第二大脑。Agent Runtime 可以在本地或远程工作区运行。
 
 [下载 OpenBrain](https://openbrain.chat/download)
 

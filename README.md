@@ -4,11 +4,12 @@
 
 > **Build your second brain. Connect with other minds.**
 
-OpenBrain is an Agent OS that brings knowledge, agents, skills, tools, and MCP
-servers together in one local/remote unified runtime. Its reusable runtime,
-protocol, agents, tools, and skills are developed in this public repository.
+OpenBrain helps you turn your knowledge into a persistent second brain, then
+connect it with other people, teams, and public brains. Your agents can query
+the brains you permit, while every connection stays explicit and under your
+control.
 
-[Download](https://openbrain.chat/download) · [Website](https://openbrain.chat) · [Explore Agent OS](https://openbrain.chat/agent-os)
+[Download](https://openbrain.chat/download) · [Website](https://openbrain.chat) · [Explore the Runtime](https://openbrain.chat/agent-os)
 
 ## Build your second brain
 
@@ -21,10 +22,10 @@ Connect personal, team, and public brains without flattening them into one
 store. The runtime queries connected brains on demand, within explicit access
 and permission boundaries.
 
-## Agent OS
+## The runtime your agents live on
 
-Agent Runtime is the kernel. OpenBrain composes the rest of the system around
-it:
+The runtime brings your second brain to life. It gives agents the context and
+capabilities to use knowledge, act through tools, collaborate, and remember:
 
 - **Agents** — Coder, custom agents, memory agents, and supported knowledge
   agents.
@@ -47,8 +48,8 @@ identity or sole foundation.
 
 ## Ready to run
 
-Download OpenBrain to build your second brain and run the Agent OS locally or
-against a remote workspace.
+Download OpenBrain to build your second brain. The agent runtime can run locally
+or against a remote workspace.
 
 [Download OpenBrain](https://openbrain.chat/download)
 
