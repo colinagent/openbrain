@@ -2,27 +2,53 @@
 
 [中文 README](./README.zh-CN.md)
 
-> **GBrain, ready to use.**
+> **Build your second brain. Connect with other minds.**
 
-OpenBrain gives GBrain a desktop experience backed by an open agent runtime.
+OpenBrain is an Agent OS that brings knowledge, agents, skills, tools, and MCP
+servers together in one local/remote unified runtime. Its reusable runtime,
+protocol, agents, tools, and skills are developed in this public repository.
 
-[Download](https://openbrain.chat/download) · [Website](https://openbrain.chat) · [GitHub](https://github.com/colinagent/openbrain)
+[Download](https://openbrain.chat/download) · [Website](https://openbrain.chat) · [Explore Agent OS](https://openbrain.chat/agent-os)
 
-## Connect other GBrains
+## Build your second brain
 
-Connect sources and peer brains. In practice, connected brains are queried on demand as subagents.
+Bring your notes, local workspaces, and knowledge sources into a brain your
+agents can query when they need context.
 
-![Personal and team brain connections](docs/assets/大脑互联图.png)
+## Connect with other minds
 
-## GBrain Agent
+Connect personal, team, and public brains without flattening them into one
+store. The runtime queries connected brains on demand, within explicit access
+and permission boundaries.
 
-**Use GBrain as a subagent**
+## Agent OS
 
-Keep your main agent focused.
+Agent Runtime is the kernel. OpenBrain composes the rest of the system around
+it:
 
-## Ready to use. Zero setup.
+- **Agents** — Coder, custom agents, memory agents, and supported knowledge
+  agents.
+- **Skills** — reusable `SKILL.md` workflow packages loaded when relevant.
+- **Tools and MCP** — built-in tools plus `TOOL.md` MCP tool servers.
+- **Subagents and memory** — delegated work with persistent thread context.
+- **OpAgent Protocol** — one contract for local and remote runtimes.
+- **Trust boundary** — permission profiles, sandboxed execution, and
+  pre-action approvals.
 
-Download OpenBrain and start with GBrain — no extra wiring.
+Read the public design docs for the [runtime](docs/runtime.md),
+[skills](docs/skills.md), [tools and MCP](docs/tools.md),
+[subagents](docs/subagent.md), and [protocol](docs/opagent-protocol.md).
+
+## GBrain support
+
+GBrain is a supported knowledge-agent and brain integration. It can be mounted
+when you want its knowledge workflow, but it is optional—not OpenBrain's core
+identity or sole foundation.
+
+## Ready to run
+
+Download OpenBrain to build your second brain and run the Agent OS locally or
+against a remote workspace.
 
 [Download OpenBrain](https://openbrain.chat/download)
 

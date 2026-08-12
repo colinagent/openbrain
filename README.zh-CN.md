@@ -2,27 +2,46 @@
 
 [English README](./README.md)
 
-> **GBrain, ready to use.**
+> **构建你的第二大脑，连接其他人的大脑。**
 
-OpenBrain 通过开放的 agent runtime 为 GBrain 提供桌面体验。
+OpenBrain 是一个 Agent OS，让知识、Agents、Skills、Tools 与 MCP Servers
+在同一个本地/远程统一 Runtime 中协同工作。可复用的 Runtime、协议、
+Agents、Tools 与 Skills 在这个公共仓库中开发。
 
-[下载](https://openbrain.chat/download) · [官网](https://openbrain.chat) · [GitHub](https://github.com/colinagent/openbrain)
+[下载](https://openbrain.chat/download) · [官网](https://openbrain.chat) · [了解 Agent OS](https://openbrain.chat/zh-CN/agent-os)
 
-## 点击连接他人的 GBrain
+## 构建你的第二大脑
 
-在图中连接 source 和同事大脑。实际使用时，连接的大脑通过 subagent 按需查询。
+把笔记、本地工作区和知识源组织成你的第二大脑，让 Agent 在需要上下文时按需查询。
 
-![个人大脑与团队大脑互联示意图](docs/assets/大脑互联图.png)
+## 连接其他人的大脑
 
-## GBrain Agent
+连接个人、团队与公开大脑，不必把所有知识压进同一个存储。Runtime 只在任务需要时，
+在明确的访问与权限边界内查询已连接的大脑。
 
-**把 GBrain 当成 subagent**
+## Agent OS
 
-让主 agent 保持专注。
+Agent Runtime 是内核，OpenBrain 在其周围组成完整系统：
 
-## 开箱即用，零配置
+- **Agents** — Coder、自定义 Agent、Memory Agent，以及受支持的知识 Agent。
+- **Skills** — 按需加载的可复用 `SKILL.md` 工作流包。
+- **Tools 与 MCP** — 内置工具和基于 `TOOL.md` 的 MCP Tool Servers。
+- **Subagents 与 Memory** — 带持久 Thread 上下文的任务委派。
+- **OpAgent Protocol** — 本地与远程 Runtime 使用同一套协议。
+- **信任边界** — 权限配置、沙箱执行和操作前审批。
 
-下载 OpenBrain，装上就能用 GBrain。
+公开设计文档包括 [Runtime](docs/runtime.md)、[Skills](docs/skills.md)、
+[Tools 与 MCP](docs/tools.md)、[Subagents](docs/subagent.md) 和
+[Protocol](docs/opagent-protocol.md)。
+
+## GBrain 支持
+
+GBrain 是 OpenBrain 支持的知识 Agent 与 Brain 集成。需要它的知识工作流时可以挂载，
+但它是可选集成，不是 OpenBrain 的核心身份或唯一基础。
+
+## 开箱运行
+
+下载 OpenBrain，构建你的第二大脑，并在本地或远程工作区运行 Agent OS。
 
 [下载 OpenBrain](https://openbrain.chat/download)
 
