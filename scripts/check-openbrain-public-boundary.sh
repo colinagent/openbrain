@@ -1,15 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "${script_dir}/.." && pwd)"
+cd "${repo_root}"
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "Missing command: rg" >&2
-  exit 1
-fi
+command -v rg >/dev/null 2>&1 || { echo "Missing command: rg" >&2; exit 1; }
 
-cd "${REPO_ROOT}"
+forbidden_paths=(
+  AGENTS.md
+  opagent-runtime
+  opagent-protocol
+  openbrain-server
+  server
+  desktop
+  apps/openbrain-desktop
+  apps/openbrain-ios
+  agents/coder
+  agents/simple-memory
+  skills/word-document
+  tools/rg-search
+  tools/systool
+)
+for path in "${forbidden_paths[@]}"; do
+  if [[ -e "${path}" ]]; then
+    echo "forbidden OpenBrain public path: ${path}" >&2
+    exit 1
+  fi
+done
 
 scan_args=(
   --hidden
@@ -20,64 +38,28 @@ scan_args=(
   --glob '!scripts/check-openbrain-public-boundary.sh'
 )
 
-global_patterns=(
-  'download[.]openbrain[.]io'
-  'resource[.]op-agent[.]com'
-  'opagent-download[.]oss-[a-z0-9-]+[.]aliyuncs[.]com'
-  'OPENBRAIN_OSS_'
-  'AWS_SECRET_ACCESS_KEY'
+patterns=(
+  'github[.]com/colinagent/openbrain/opagent-(runtime|protocol)'
+  'github[.]com/op-agent/OpAgent'
+  'OPENBRAIN_BASE_DIR'
+  'OPENBRAIN_HOME'
+  'OP_HOME'
+  '[.]openbrain'
   'api[.]opagent[.]chat'
   'api[.]openbrain[.]chat'
-  '/gbrain/mcp'
+  'download[.]openbrain[.]io'
+  'resource[.]op-agent[.]com'
+  'OPENBRAIN_OSS_'
+  'AWS_SECRET_ACCESS_KEY'
   'openbrain-dev'
   '/Users/colin'
-  'io[.]openbrain[.]ios'
-  'OpenBrainMobile'
-)
-
-openbrain_patterns=(
-  'alidns'
-  'openbrain-manager'
-  'manager[_ -]?token'
-  'tailnet'
-  'tailscale'
+  'ssh dev'
 )
 
 failed=0
-for pattern in \
-  '^AGENTS[.]md$' \
-  '^[.]agent/' \
-  '^[.]claude/' \
-  '^[.]context/' \
-  '^gbrain/' \
-  '^mobile/ios/' \
-  '^desktop/' \
-  '^server/' \
-  '^agents/opagent-server/' \
-  '^docs/desktop[.]md$'
-do
-  if matches="$(git ls-files | rg -n -e "${pattern}")"; then
-    echo "Forbidden public tracked path: ${pattern}" >&2
-    echo "${matches}" >&2
-    failed=1
-  fi
-done
-
-for pattern in "${global_patterns[@]}"; do
+for pattern in "${patterns[@]}"; do
   if matches="$(rg -n -i -S -e "${pattern}" "${scan_args[@]}" .)"; then
-    echo "Forbidden public-boundary match: ${pattern}" >&2
-    echo "${matches}" >&2
-    failed=1
-  fi
-done
-
-openbrain_paths=()
-for path in README.md .github docs opagent-runtime scripts opagent-protocol agents tools skills; do
-  [[ -e "${path}" ]] && openbrain_paths+=("${path}")
-done
-for pattern in "${openbrain_patterns[@]}"; do
-  if matches="$(rg -n -i -S -e "${pattern}" "${scan_args[@]}" "${openbrain_paths[@]}")"; then
-    echo "Forbidden OpenBrain public-boundary match: ${pattern}" >&2
+    echo "forbidden public-boundary match: ${pattern}" >&2
     echo "${matches}" >&2
     failed=1
   fi

@@ -19,11 +19,11 @@ Use this skill only for the managed `OpenBrain Cloud Sync` cron task or an expli
 2. If this turn is a message-system follow-up with `selectedSkillContext.messageSystem=true`
    and `answers`, handle the user answer before normal preflight.
 3. Run the helper preflight once before doing detailed work. The helper reads
-   the current OpenBrain account from `~/.openbrain/configs/user/auth.json` and
+   the current OpenBrain account from `~/.opagent/openbrain/configs/user/auth.json` and
    only returns workspaces from that account's local index partition. On Windows,
    append `.exe` to the helper filename:
    ```sh
-   ~/.openbrain/skills/openbrain-cloud-sync/bin/openbrain-cloud-sync-helper preflight
+   ~/.opagent/openbrain/skills/openbrain-cloud-sync/bin/openbrain-cloud-sync-helper preflight
    ```
    For a manual request, use `preflight --include-disabled` so the requested
    workspace can be inspected even when auto sync is disabled.
@@ -38,11 +38,11 @@ Use this skill only for the managed `OpenBrain Cloud Sync` cron task or an expli
    publishing a new request.
 6. For each workspace that needs sync, run:
    ```sh
-   ~/.openbrain/skills/openbrain-cloud-sync/bin/openbrain-cloud-sync-helper sync --workspace-id <workspaceID>
+   ~/.opagent/openbrain/skills/openbrain-cloud-sync/bin/openbrain-cloud-sync-helper sync --workspace-id <workspaceID>
    ```
    When applying an existing keep-independent decision, rerun with:
    ```sh
-   ~/.openbrain/skills/openbrain-cloud-sync/bin/openbrain-cloud-sync-helper sync --workspace-id <workspaceID> --allow-nested <path>
+   ~/.opagent/openbrain/skills/openbrain-cloud-sync/bin/openbrain-cloud-sync-helper sync --workspace-id <workspaceID> --allow-nested <path>
    ```
 7. If the helper returns `ok: true`, record the result and move to the next workspace.
 8. If the helper returns a blocking status, inspect with normal git commands in that workspace and decide whether it is safe to continue.
@@ -52,7 +52,7 @@ The helper handles OpenBrain API auth, workspace GitHub token exchange, temporar
 Token handling:
 
 - If the helper returns `code: "git_token_expired"` with `retryable: true`, rerun that helper command once. The helper requests a fresh short-lived workspace git token on every run.
-- If the helper returns `code: "login_required"`, the user's OpenBrain session token in `~/.openbrain/configs/user/auth.json` is expired or missing. Do not keep retrying git. Publish a message telling the user to sign in again from the OpenBrain desktop login dialog, then rerun the helper after the user confirms login is complete.
+- If the helper returns `code: "login_required"`, the user's OpenBrain session token in `~/.opagent/openbrain/configs/user/auth.json` is expired or missing. Do not keep retrying git. Publish a message telling the user to sign in again from the OpenBrain desktop login dialog, then rerun the helper after the user confirms login is complete.
 - If the helper returns `code: "cloud_permission_denied"`, the current OpenBrain account lacks Cloud workspace ACL access. Do not describe this as a GitHub App or repo permission problem. Publish a request with fixed options to switch accounts, request sharing, remove the local binding, or skip this workspace.
 - If the helper returns `code: "workspace_not_bound_for_account"`, do not sync by guessing from old local state. Treat the workspace as not bound for the current account and use the same recovery choices as `cloud_permission_denied`.
 - Use `git_permission_denied` only for real git/GitHub repository access failures from git commands.

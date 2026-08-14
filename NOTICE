@@ -3,35 +3,27 @@ OpenBrain
 
 Copyright (c) 2026 OpAgent Inc
 
-OpenBrain is a product of OpAgent Inc. This product includes software
-developed by OpAgent Inc.
+OpenBrain is a product of OpAgent Inc. Source in this repository is licensed
+under GNU Affero General Public License v3.0 unless a file states otherwise.
 
 Attribution
 -----------
 
-If you modify, distribute, or offer as a network service any OpenBrain
-component licensed under AGPL-3.0 in this repository (including agents,
-skills, tools, opagent-runtime, opagent-protocol, and related documentation),
-you must:
+If you modify, distribute, or offer as a network service an AGPL-3.0 OpenBrain
+component from this repository, you must comply with the license, retain this
+NOTICE, and clearly state that the work is based on OpenBrain:
+https://github.com/colinagent/openbrain
 
-1. Comply with the GNU Affero General Public License v3.0, including
-   making corresponding source available when required.
-2. Retain this NOTICE file in source and binary distributions.
-3. Clearly state that your work is based on OpenBrain. For example, in
-   documentation, an About screen, or package metadata: "Based on
-   OpenBrain (https://github.com/colinagent/openbrain)" or equivalent.
+OpAgent
+-------
+
+OpenBrain uses the separately maintained OpAgent Runtime and Protocol from
+https://github.com/colinagent/opagent under Apache License 2.0. OpAgent source
+is not duplicated in this repository.
 
 GBrain Integration
 ------------------
 
-OpenBrain can package a GBrain CLI binary and ships a GBrain-backed agent
-integration. GBrain source is maintained outside this repository under the MIT
-License in `garrytan/gbrain`. OpenBrain builds that upstream source directly;
-the public `colinagent/gbrain` repository is an upstream-aligned binary mirror.
-
-Third-Party Components
-----------------------
-
-Some files include third-party code under separate licenses (for example,
-Go MCP SDK components in opagent-protocol/go-sdk). Those files retain
-their original copyright and license notices.
+OpenBrain ships a GBrain-backed product integration. GBrain is maintained
+outside this repository under the MIT License in `garrytan/gbrain`; the public
+`colinagent/gbrain` repository is an upstream-aligned binary mirror.

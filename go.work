@@ -3,13 +3,7 @@ go 1.26.3
 toolchain go1.26.3
 
 use (
-	./agents/coder
-	./opagent-protocol/go-sdk
-	./opagent-runtime
+	./integrations/opagent
+	./protocol/remotecontrol
 	./skills/openbrain-cloud-sync
-	./skills/word-document
 )
-
-replace github.com/colinagent/openbrain/opagent-protocol/go-sdk v0.1.0 => ./opagent-protocol/go-sdk
-
-replace github.com/colinagent/openbrain/opagent-runtime v0.1.0 => ./opagent-runtime

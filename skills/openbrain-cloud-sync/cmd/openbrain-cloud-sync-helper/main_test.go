@@ -13,7 +13,7 @@ import (
 
 func TestLoadEligibleWorkspacesSkipsDisabledByDefault(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("OPENBRAIN_HOME", filepath.Join(home, ".openbrain"))
+	t.Setenv("OPAGENT_BASE_DIR", filepath.Join(home, ".opagent", "openbrain"))
 	writeTestAuth(t, "http://127.0.0.1.invalid")
 	writeTestIndex(t, []workspaceEntry{
 		{
@@ -54,7 +54,7 @@ func TestLoadEligibleWorkspacesSkipsDisabledByDefault(t *testing.T) {
 
 func TestLoadEligibleWorkspacesOnlyCurrentAccount(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("OPENBRAIN_HOME", filepath.Join(home, ".openbrain"))
+	t.Setenv("OPAGENT_BASE_DIR", filepath.Join(home, ".opagent", "openbrain"))
 	writeTestAuth(t, "http://127.0.0.1.invalid")
 	path := filepath.Join(openBrainHome(), "index", "workspaces.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -101,7 +101,7 @@ func TestLoadEligibleWorkspacesOnlyCurrentAccount(t *testing.T) {
 
 func TestFindEligibleWorkspaceReportsAccountBindingMiss(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("OPENBRAIN_HOME", filepath.Join(home, ".openbrain"))
+	t.Setenv("OPAGENT_BASE_DIR", filepath.Join(home, ".opagent", "openbrain"))
 	writeTestAuth(t, "http://127.0.0.1.invalid")
 	writeTestIndex(t, []workspaceEntry{{
 		WorkspaceID: "current",
@@ -123,7 +123,7 @@ func TestFindEligibleWorkspaceReportsAccountBindingMiss(t *testing.T) {
 
 func TestPreflightUsesFetchHeadToDetectRemoteChanges(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("OPENBRAIN_HOME", filepath.Join(home, ".openbrain"))
+	t.Setenv("OPAGENT_BASE_DIR", filepath.Join(home, ".opagent", "openbrain"))
 	remote := filepath.Join(home, "remote.git")
 	localA := filepath.Join(home, "a")
 	localB := filepath.Join(home, "b")
@@ -235,7 +235,7 @@ func TestWorkspaceGitTokenClassifiesCloudPermissionDenied(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
-			t.Setenv("OPENBRAIN_HOME", filepath.Join(home, ".openbrain"))
+			t.Setenv("OPAGENT_BASE_DIR", filepath.Join(home, ".opagent", "openbrain"))
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/v1/orgs/org/workspaces/ws/git-token" {
 					http.NotFound(w, r)

@@ -1,4 +1,5 @@
 ---
+id: tools-gbrain-cloud
 name: gbrain-cloud
 description: OpenBrain Cloud GBrain MCP tool server. Uses the current OpenBrain session.
 tags: builtin

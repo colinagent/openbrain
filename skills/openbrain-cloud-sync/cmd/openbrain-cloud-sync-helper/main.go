@@ -832,17 +832,14 @@ func (index *workspaceIndexFile) activate(deploymentID string, orgID string, uid
 }
 
 func openBrainHome() string {
-	if value := strings.TrimSpace(os.Getenv("OPENBRAIN_HOME")); value != "" {
-		return value
-	}
-	if value := strings.TrimSpace(os.Getenv("OP_HOME")); value != "" {
+	if value := strings.TrimSpace(os.Getenv("OPAGENT_BASE_DIR")); value != "" {
 		return value
 	}
 	home, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {
-		return ".openbrain"
+		return filepath.Join(".opagent", "openbrain")
 	}
-	return filepath.Join(home, ".openbrain")
+	return filepath.Join(home, ".opagent", "openbrain")
 }
 
 func runGit(ctx context.Context, dir string, env []string, args ...string) (string, error) {
